@@ -8,9 +8,22 @@ struct sockaddr_in addr;
 // server code
 int main(int argc, char *argv[]) 
 {
-    int sd = UDP_Open(10000);
+    if (argc != 3){
+	printf("Incorrect usage of server");
+	return 0;
+    }
+    int portNum = atoi(argv[1]);
+    int fd = UDP_Open(portNum);
     printf("server:: waiting...\n");
-
+    char *fileSystemImage = strdup(argv[2]);
+    UDP_FillSockAddr(&addr, "localhost", portNum);
+    int fileSystem = open(fileSystemImage, O_CREAT | O_RDWR);
+    if (fileSystem < 0 || fd < 0){
+	    return -1;
+    }
+    
+    
+    
     packet msg;
     while (1)
     {

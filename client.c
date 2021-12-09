@@ -7,7 +7,7 @@
 // client code (testing)
 int main(int argc, char *argv[]) 
 {
-    MFS_Init("localhost", 10000);
+    MFS_Init("localhost", argv[1]);
 
     char message[MFS_BLOCK_SIZE];
     sprintf(message, "hello world");
