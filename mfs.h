@@ -21,6 +21,11 @@ typedef struct __MFS_DirEnt_t {
 typedef struct packet {
     int request;
     char block[MFS_BLOCK_SIZE];
+    int inum;
+    int blocknum;
+    char name[64];
+    int type;
+    MFS_Stat_t stat;
 } packet;
 
 int MFS_Init(char *hostname, int port);

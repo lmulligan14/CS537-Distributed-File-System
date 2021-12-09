@@ -21,7 +21,7 @@ int main(int argc, char *argv[])
             printf("server:: read message [size:%d contents:(%s)]\n", rc, msg.block);
 
             packet rep;
-            char reply[BUFFER_SIZE];
+            char reply[1000];
             sprintf(reply, "goodbye world");
             memcpy(rep.block, reply, MFS_BLOCK_SIZE);
             UDP_Write(sd, &addr, reply, sizeof(packet));
