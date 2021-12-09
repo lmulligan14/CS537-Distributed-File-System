@@ -1,29 +1,53 @@
 #include <stdio.h>
+#include <stdlib.h>
+#include <sys/stat.h>
 #include "udp.h"
 #include "mfs.h"
 #include "requests.h"
 
 struct sockaddr_in addr;
+struct CheckpointRegion* cr;
 
-// server code
-int main(int argc, char *argv[]) 
+// Initialize file system (code from main)
+int fs_init(int portNum, char* fileSystemImage)
 {
-    if (argc != 3){
-	printf("Incorrect usage of server");
-	return 0;
-    }
-    int portNum = atoi(argv[1]);
-    int fd = UDP_Open(portNum);
-    printf("server:: waiting...\n");
-    char *fileSystemImage = strdup(argv[2]);
+    int sd = UDP_Open(portNum);
     UDP_FillSockAddr(&addr, "localhost", portNum);
     int fileSystem = open(fileSystemImage, O_CREAT | O_RDWR);
-    if (fileSystem < 0 || fd < 0){
+
+    // Check if file is valid
+    if (fileSystem < 0 || sd < 0)
+    {
+        perror("Could not open file\n");
 	    return -1;
     }
+
+    // Check if file is valid
+    struct stat fs;
+    if (fstat(fileSystem, &fs) < 0)
+    {
+        perror("Could not open file\n");
+	    return -1;
+    }
+
+    // Set up file (unfinished)
+    cr = (CheckpointRegion*) malloc(sizeof(CheckpointRegion));
+    if (fs.st_size < sizeof(CheckpointRegion))
+    {   /* New file */
+
+        cr->logEnd = sizeof(CheckpointRegion);
+        for (int i = 0; i < NUM_INODE_PIECES; i++)
+        {
+            cr->imap[i] = -1;
+        }
+    }
+    else
+    {   /* Existing file */
+
+    }
     
-    
-    
+    // Recieve requests
+    printf("server:: waiting...\n");
     packet msg;
     while (1)
     {
@@ -40,6 +64,20 @@ int main(int argc, char *argv[])
             UDP_Write(sd, &addr, reply, sizeof(packet));
         }
     }
+
+    return 0;
+}
+
+// server code
+int main(int argc, char *argv[]) 
+{
+    if (argc != 3)
+    {
+        perror("Incorrect usage of server\n");
+        return 0;
+    }
+
+    fs_init(atoi(argv[1]), argv[2]);
 
     return 0;
 }
