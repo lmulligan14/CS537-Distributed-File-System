@@ -1,10 +1,26 @@
 #include <stdio.h>
 #include "udp.h"
+#include "mfs.h"
 
 #define BUFFER_SIZE (1000)
 
-// client code
-int main(int argc, char *argv[]) {
+// client code (testing)
+int main(int argc, char *argv[]) 
+{
+    MFS_Init("localhost", 10000);
+
+    char message[MFS_BLOCK_SIZE];
+    sprintf(message, "hello world");
+
+    MFS_Write(0, message, 0);
+
+    return 0;
+}
+
+
+/* OLD CLIENT
+int main(int argc, char *argv[]) 
+{
     struct sockaddr_in addrSnd, addrRcv;
 
     int sd = UDP_Open(20000);
@@ -24,5 +40,4 @@ int main(int argc, char *argv[]) {
     rc = UDP_Read(sd, &addrRcv, message, BUFFER_SIZE);
     printf("client:: got reply [size:%d contents:(%s)\n", rc, message);
     return 0;
-}
-
+}*/
