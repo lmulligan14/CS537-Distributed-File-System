@@ -7,8 +7,13 @@
 // client code (testing)
 int main(int argc, char *argv[]) 
 {
-    MFS_Init("localhost", argv[1]);
-
+    if (argc != 3){
+	    printf("Incorrect usage");
+	    return 0;
+    }
+    char *hostName = strdup(argv[1]);
+    int portNum = atoi(argv[2]);
+	MFS_Init("hostName", portNum);
     char message[MFS_BLOCK_SIZE];
     sprintf(message, "hello world");
 
