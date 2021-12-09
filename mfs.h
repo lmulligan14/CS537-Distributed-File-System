@@ -17,6 +17,11 @@ typedef struct __MFS_DirEnt_t {
     int  inum;      // inode number of entry (-1 means entry not used)
 } MFS_DirEnt_t;
 
+// struct message/packet
+typedef struct packet {
+    int request;
+    char block[MFS_BLOCK_SIZE];
+} packet;
 
 int MFS_Init(char *hostname, int port);
 int MFS_Lookup(int pinum, char *name);
