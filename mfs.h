@@ -5,6 +5,9 @@
 #define MFS_REGULAR_FILE (1)
 
 #define MFS_BLOCK_SIZE   (4096)
+#define MAX_NUM_INODES   (4096)
+#define IMAP_PIECE_SIZE  (16)
+#define NUM_INODE_PIECES (MAX_NUM_INODES/IMAP_PIECE_SIZE) // 256
 
 typedef struct __MFS_Stat_t {
     int type;   // MFS_DIRECTORY or MFS_REGULAR
@@ -27,6 +30,24 @@ typedef struct packet {
     int type;
     MFS_Stat_t stat;
 } packet;
+
+// struct for INode
+typedef struct INode {
+    int type;
+    int size;
+    int blocks[14];
+} INode;
+
+// struct for checkpoint region
+typedef struct CheckpointRegion {
+    int logEnd;
+    int imap[NUM_INODE_PIECES]; // holds 256 imap pieces
+} CheckpointRegion;
+
+// struct for imap piece
+typedef struct ImapPiece {
+    int inodes[IMAP_PIECE_SIZE]; // holds 16 inodes
+} ImapPiece;
 
 int MFS_Init(char *hostname, int port);
 int MFS_Lookup(int pinum, char *name);
