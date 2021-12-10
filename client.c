@@ -13,7 +13,7 @@ int main(int argc, char *argv[])
     }
     char *hostName = strdup(argv[1]);
     int portNum = atoi(argv[2]);
-	MFS_Init(hostName, portNum);
+    MFS_Init(hostName, portNum);
     char message[MFS_BLOCK_SIZE];
     sprintf(message, "hello world");
 

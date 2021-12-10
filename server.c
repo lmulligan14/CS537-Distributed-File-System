@@ -7,6 +7,7 @@
 
 struct sockaddr_in addr;
 struct CheckpointRegion* cr;
+int inodeNum;
 
 // Initialize file system (code from main)
 int fs_init(int portNum, char* fileSystemImage)
@@ -22,7 +23,7 @@ int fs_init(int portNum, char* fileSystemImage)
 	    return -1;
     }
 
-    // Check if file is valid
+    // make a copy
     struct stat fs;
     if (fstat(fileSystem, &fs) < 0)
     {
@@ -31,10 +32,11 @@ int fs_init(int portNum, char* fileSystemImage)
     }
 
     // Set up file (unfinished)
+    
     cr = (CheckpointRegion*) malloc(sizeof(CheckpointRegion));
     if (fs.st_size < sizeof(CheckpointRegion))
     {   /* New file */
-
+	
         cr->logEnd = sizeof(CheckpointRegion);
         for (int i = 0; i < NUM_INODE_PIECES; i++)
         {
