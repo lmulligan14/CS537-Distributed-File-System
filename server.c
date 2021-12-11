@@ -8,16 +8,63 @@
 struct sockaddr_in addr;
 struct CheckpointRegion* cr;
 int inodeNum;
+int imageFD;
+
+
+int inodeInit(int type, int size){
+	int inodeMapPtr = cr->imap[inodeNum/16];
+	int inodeMapOffset = inodeNum % 16;
+	struct ImapPiece* mapPiece = malloc(sizeof(struct ImapPiece));
+	int inodePtr = 0;
+	int rc;
+	if (inodeMapOffset == 0){
+		mapPiece->inodes[0] = inodePtr = cr->logEnd + sizeof(struct ImapPiece);
+		rc = lseek(imageFD, cr->logEnd, SEEK_SET);
+		rc = write(imageFD, mapPiece, sizeof(struct ImapPiece));
+		cr->imap[inodeNum/16] = cr->logEnd;
+		cr->logEnd += sizeof(struct ImapPiece);
+		rc = lseek(imageFD, 0, SEEK_SET);
+		rc = write(imageFD, cr, sizeof(CheckpointRegion);
+		rc = lseek(imageFD, cr->logEnd, SEEK_SET);
+	}
+	else{
+		rc = lseek(imageFD, inodeMapPtr, SEEK_SET);
+		rc = read(imageFD, mapPiece, sizeof(struct ImapPiece));
+		mapPiece[inodeMapOffset] = inodePtr = cr->logEnd + sizeof(struct ImapPiece);
+		rc = lseek(imageFD, cr->logEnd, SEEK_SET);
+		rc = write(imageFD, mapPiece, sizeof(struct ImapPiece));
+		cr->imap[inodeNum/16] = cr->logEnd;
+		cr->logEnd += sizeof(struct ImapPiece);
+		rc = lseek(imageFD, 0, SEEK_SET);
+                rc = write(imageFD, cr, sizeof(CheckpointRegion);
+                rc = lseek(imageFD, cr->logEnd, SEEK_SET);
+	}
+	inodeMap[inodeNum] = inodePtr;
+	struct INode *node = malloc(sizeof(INode));
+	node->type = type;
+	node->size = size;
+	if (node->type == MFS_DIRECTORY){
+		node->blocks[0] = inodePtr + sizeof(INode);
+	}
+	rc = lseek(imageFD, inodePtr, SEEK_SET);
+	rc = write(imageFD, node, sizeof(INode));
+	cr->logEnd += sizeof(INode);
+	rc = lseek(imageFD, 0, SEEK_SET);
+        rc = write(imageFD, cr, sizeof(CheckpointRegion);
+        rc = lseek(imageFD, cr->logEnd, SEEK_SET);
+	inodeNum++;
+	return inodeNum-1;
+}
 
 // Initialize file system (code from main)
 int fs_init(int portNum, char* fileSystemImage)
 {
     int sd = UDP_Open(portNum);
     UDP_FillSockAddr(&addr, "localhost", portNum);
-    int fileSystem = open(fileSystemImage, O_CREAT | O_RDWR);
+    imageFD = open(fileSystemImage, O_CREAT | O_RDWR);
 
     // Check if file is valid
-    if (fileSystem < 0 || sd < 0)
+    if (imageFD < 0 || sd < 0)
     {
         perror("Could not open file\n");
 	    return -1;
@@ -25,23 +72,26 @@ int fs_init(int portNum, char* fileSystemImage)
 
     // make a copy
     struct stat fs;
-    if (fstat(fileSystem, &fs) < 0)
+    if (fstat(imageFD, &fs) < 0)
     {
         perror("Could not open file\n");
 	    return -1;
     }
 
     // Set up file (unfinished)
-    
+     
     cr = (CheckpointRegion*) malloc(sizeof(CheckpointRegion));
+    inodeNum = 0;
+
     if (fs.st_size < sizeof(CheckpointRegion))
     {   /* New file */
-	
+	    //set up checkpoint region
         cr->logEnd = sizeof(CheckpointRegion);
-        for (int i = 0; i < NUM_INODE_PIECES; i++)
-        {
-            cr->imap[i] = -1;
-        }
+	int rc = lseek(imageFD, 0, SEEK_SET);
+	rc = write(imageFD, cr, sizeof(CheckpointRegion));
+	rc = lseek(imageFD, cr->logEnd, SEEK_SET);
+	//make the root directory
+	
     }
     else
     {   /* Existing file */
