@@ -10,6 +10,11 @@ struct CheckpointRegion* cr;
 int inodeNum;
 int imageFD;
 
+void updateCR(){
+    int rc = lseek(imageFD, 0, SEEK_SET);
+    rc = write(imageFD, cr, sizeof(CheckpointRegion));
+    rc = lseek(imageFD, cr->logEnd, SEEK_SET);
+}
 
 int inodeInit(int type, int size){
 	int inodeMapPtr = cr->imap[inodeNum/16];
@@ -23,9 +28,7 @@ int inodeInit(int type, int size){
 		rc = write(imageFD, mapPiece, sizeof(struct ImapPiece));
 		cr->imap[inodeNum/16] = cr->logEnd;
 		cr->logEnd += sizeof(struct ImapPiece);
-		rc = lseek(imageFD, 0, SEEK_SET);
-		rc = write(imageFD, cr, sizeof(CheckpointRegion);
-		rc = lseek(imageFD, cr->logEnd, SEEK_SET);
+		updateCR();
 	}
 	else{
 		rc = lseek(imageFD, inodeMapPtr, SEEK_SET);
@@ -35,9 +38,7 @@ int inodeInit(int type, int size){
 		rc = write(imageFD, mapPiece, sizeof(struct ImapPiece));
 		cr->imap[inodeNum/16] = cr->logEnd;
 		cr->logEnd += sizeof(struct ImapPiece);
-		rc = lseek(imageFD, 0, SEEK_SET);
-                rc = write(imageFD, cr, sizeof(CheckpointRegion);
-                rc = lseek(imageFD, cr->logEnd, SEEK_SET);
+		updateCR();
 	}
 	inodeMap[inodeNum] = inodePtr;
 	struct INode *node = malloc(sizeof(INode));
@@ -54,6 +55,23 @@ int inodeInit(int type, int size){
         rc = lseek(imageFD, cr->logEnd, SEEK_SET);
 	inodeNum++;
 	return inodeNum-1;
+}
+
+int dirInit(int pInum, char *name){
+    int inodeNum = inodeInit(MFS_DIRECTORY, sizeof(struct MFS_DirEnt_t)*2);
+    struct MFS_DirEnt_t *block = malloc(MFS_BLOCK_SIZE);
+    sprintf(block[0].name, ".");
+    block[0].inum = inodeNum;
+    sprintf(block[1].name, "..");
+    block[1].inum = pInum;
+    for (int i = 2; i < (MFS_BLOCK_SIZE/sizeof(struct MFS_DirEnt_t)); i++){
+        block[i].inum = -1;
+    }
+    int rc = lseek(imageFD, cr->logEnd, SEEK_SET);
+    rc = write(imageFD, block, MFS_BLOCK_SIZE);
+    cr->logEnd += MFS_BLOCK_SIZE);
+    updateCR();
+    
 }
 
 // Initialize file system (code from main)
@@ -87,9 +105,7 @@ int fs_init(int portNum, char* fileSystemImage)
     {   /* New file */
 	    //set up checkpoint region
         cr->logEnd = sizeof(CheckpointRegion);
-	int rc = lseek(imageFD, 0, SEEK_SET);
-	rc = write(imageFD, cr, sizeof(CheckpointRegion));
-	rc = lseek(imageFD, cr->logEnd, SEEK_SET);
+        updateCR();
 	//make the root directory
 	
     }
@@ -158,3 +174,4 @@ int main(int argc, char *argv[])
     }
     return 0;
 }*/
+
