@@ -53,6 +53,19 @@ typedef struct DirBlock {
     MFS_DirEnt_t entries[MFS_BLOCK_SIZE/sizeof(MFS_DirEnt_t)]; // holds 128 entries
 } DirBlock;
 
+typedef struct MFS_Lookup_Function{
+    int type;
+    int pinum;
+    char name[64];
+} MFS_Lookup_Function;
+
+typedef struct MFS_Write_Function{
+    int type;
+    int inum;
+    char buffer[4096];
+    int block;
+} MFS_Lookup_Function;
+
 int MFS_Init(char *hostname, int port);
 int MFS_Lookup(int pinum, char *name);
 int MFS_Stat(int inum, MFS_Stat_t *m);

@@ -208,21 +208,22 @@ int fs_init(int portNum, char* fileSystemImage)
     packet msg;
     while (1)
     {
-        int rc = UDP_Read(sd, &addr, (char*) &msg, sizeof(packet));
-        
-        if (msg.request == INIT)
+        char buffer[sizeof(MFS_Write_Function)];
+        int rc = UDP_Read(sd, &addr, buffer, sizeof(packet));
+        int type = *(int *)buffer;
+        if (type == INIT)
         {
             // Why would someone call INIT after already starting the program?
         }
-        else if (msg.request == LOOKUP)
+        else if (type == LOOKUP)
         {
 
         }
-        else if (msg.request == STAT)
+        else if (type == STAT)
         {
             
         }
-        else if (msg.request == WRITE)
+        else if (type == WRITE)
         {
             printf("server:: read message [size:%d contents:(%s)]\n", rc, msg.block);
 
@@ -232,7 +233,7 @@ int fs_init(int portNum, char* fileSystemImage)
             memcpy(res.block, reply, MFS_BLOCK_SIZE);
             UDP_Write(sd, &addr, reply, sizeof(packet));
         }
-        else if (msg.request == READ)
+        else if (type == READ)
         {
             packet res;
             char buffer[MFS_BLOCK_SIZE];
@@ -241,15 +242,15 @@ int fs_init(int portNum, char* fileSystemImage)
             memcpy(res.block, buffer, MFS_BLOCK_SIZE);
             UDP_Write(sd, &addr, (char*) &res, sizeof(packet));
         }
-        else if (msg.request == CREAT)
+        else if (type == CREAT)
         {
             
         }
-        else if (msg.request == UNLINK)
+        else if (type == UNLINK)
         {
             
         }
-        else if (msg.request == SHUTDOWN)
+        else if (type == SHUTDOWN)
         {
             free(cr);
         }
