@@ -2,8 +2,6 @@
 #include "udp.h"
 #include "mfs.h"
 
-#define BUFFER_SIZE (1000)
-
 // client code (testing)
 int main(int argc, char *argv[]) 
 {
@@ -14,10 +12,10 @@ int main(int argc, char *argv[])
     char *hostName = strdup(argv[1]);
     int portNum = atoi(argv[2]);
     MFS_Init(hostName, portNum);
-    char message[MFS_BLOCK_SIZE];
-    sprintf(message, "hello world");
 
-    MFS_Write(0, message, 0);
+    char buffer[MFS_BLOCK_SIZE];
+    MFS_Read(0, buffer, 0);
+    printf("%s", buffer);
 
     return 0;
 }
