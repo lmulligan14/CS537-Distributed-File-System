@@ -8,7 +8,7 @@
 
 struct sockaddr_in *addr;
 struct CheckpointRegion* cr;
-
+int *inodeMap;
 int imageFD;
 
 void updateCR(){
@@ -186,7 +186,7 @@ int fs_init(int portNum, char* fileSystemImage)
 
     // Set up file (unfinished)
     int currentInodeNum = 0;
-    addr = malloc(sizeof(sockaddr_in));
+    addr = malloc(sizeof(struct sockaddr_in));
     cr = malloc(sizeof(CheckpointRegion));
     inodeMap = malloc(sizeof(int) * 4096);
     if (fs.st_size < sizeof(CheckpointRegion))
@@ -207,7 +207,7 @@ int fs_init(int portNum, char* fileSystemImage)
     else
     {   /* Existing file */
         read(imageFD, cr, sizeof(CheckpointRegion));
-        for (int i = 0; i < NUM_INODE_PIECES){
+        for (int i = 0; i < NUM_INODE_PIECES; i++){
             int inodeMapPtr = cr->imap[i];
             if (inodeMapPtr > 0){
                 lseek(imageFD, inodeMapPtr, SEEK_SET);
@@ -238,14 +238,11 @@ int fs_init(int portNum, char* fileSystemImage)
         int type = *(int *)buffer;
         if (type == LOOKUP)
         {
-            args[0] = strtok(NULL, "~");
-			args[1] = strtok(NULL, "~");
-			MFS_Lookup(atoi(args[0]), args[1]);
+    
         }
         else if (type == STAT)
         {
-            args[0] = strtok(NULL, "~");
-			MFS_Stat(atoi(args[0]));
+           
         }
         else if (type == WRITE)
         {
@@ -268,20 +265,15 @@ int fs_init(int portNum, char* fileSystemImage)
         }
         else if (type == CREAT)
         {
-            args[0] = strtok(NULL, "~");
-			args[1] = strtok(NULL, "~");
-			args[2] = strtok(NULL, "~");
-			MFS_Creat(atoi(args[0]), atoi(args[1]), args[2]);
+           
         }
         else if (type == UNLINK)
         {
-            args[0] = strtok(NULL, "~");
-			args[1] = strtok(NULL, "~");
-			MFS_Unlink(atoi(args[0]), args[1]);
+            
         }
         else if (type == SHUTDOWN)
         {
-            MFS_Shutdown(imageFD);
+            
         }
         else
             perror("Invalid request\n");
