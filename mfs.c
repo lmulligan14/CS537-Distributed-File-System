@@ -70,8 +70,8 @@ int MFS_Read(int inum, char *buffer, int block)
     msg.request = READ;
     msg.inum = inum;
     msg.blocknum = block;
-    memcpy(msg.block, buffer, sizeof(char[MFS_BLOCK_SIZE]));
     sendRequest(&msg, &res);
+    memcpy(buffer, res.block, sizeof(char[MFS_BLOCK_SIZE]));
 
     return 0;
 }

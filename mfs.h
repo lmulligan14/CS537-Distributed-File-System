@@ -49,6 +49,10 @@ typedef struct ImapPiece {
     int inodes[IMAP_PIECE_SIZE]; // holds 16 inodes
 } ImapPiece;
 
+typedef struct DirBlock {
+    MFS_DirEnt_t entries[MFS_BLOCK_SIZE/sizeof(MFS_DirEnt_t)]; // holds 128 entries
+} DirBlock;
+
 int MFS_Init(char *hostname, int port);
 int MFS_Lookup(int pinum, char *name);
 int MFS_Stat(int inum, MFS_Stat_t *m);
