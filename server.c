@@ -22,122 +22,6 @@ void updateCR(){
     rc = lseek(imageFD, cr->logEnd, SEEK_SET);
 }
 
-int WriteParentDirEnt(int pINum, int cINum, char *cName) {
-	INode *parentINode = GetINode(pINum);
-	if(parentINode != NULL && parentINode->type == MFS_DIRECTORY) {
-		// Read Old Dir Entry Data
-		int blockIndex;		
-		DirEnt *parentBlock = malloc(MFS_BLOCK_SIZE);
-		DirEnt *emptyBlock = malloc(MFS_BLOCK_SIZE);
-		for(blockIndex = 0; blockIndex < 14; blockIndex++) {
-			int parentBlockPointer = parentINode->blocks[blockIndex];
-			if(parentBlockPointer == 0) {
-				// Create Directory Entry Block
-				memcpy(parentBlock, emptyBlock, MFS_BLOCK_SIZE);
-				int i;
-				for (i = 0; i < MFS_BLOCK_SIZE/sizeof(DirEnt); i++) {
-					parentBlock[i].iNum = -1;
-				}
-			} 
-			else {
-				// Read existing Directory Entry Block
-				rc = lseek(imageFD, parentBlockPointer, SEEK_SET);
-				if(rc < 0) {
-					return -1;
-				}
-				rc = read(imageFD, parentBlock, MFS_BLOCK_SIZE);
-				if(rc < 0) {
-					return -1;
-				}	
-			}
-			// Write Dir Entry Data
-			int dirEntIndex;			
-			for(dirEntIndex = 0; dirEntIndex < MFS_BLOCK_SIZE/sizeof(DirEnt); dirEntIndex++) {
-				if((!strcmp(parentBlock[dirEntIndex].name, cName) && parentBlock[dirEntIndex].iNum >= 0) || (parentBlock[dirEntIndex].iNum == -1 && cINum >= 0)) {
-					int iNodePointer = 0;
-					int iNodeMapPointer = checkpointRegion->iNodeMaps[pINum/16];
-					int iNodeMapOffset = pINum % 16;
-					int *iNodeMapPiece = malloc(16*sizeof(int));
-
-					// Read IMap Piece
-					rc = lseek(imageFD, iNodeMapPointer, SEEK_SET);
-					if(rc < 0) {
-						return -1;
-					}
-					rc = read(imageFD, iNodeMapPiece, 16*sizeof(int));
-					if(rc < 0) {
-						return -1;
-					}
-					// Update INodeMap Piece
-					iNodeMapPiece[iNodeMapOffset] = iNodePointer = checkpointRegion->logEnd + 16*sizeof(int);
-					// Write INodeNum to IMap Piece
-					rc = lseek(imageFD, checkpointRegion->logEnd, SEEK_SET);
-					if(rc < 0) {
-						return -1;
-					}
-					rc = write(imageFD, iNodeMapPiece, 16*sizeof(int));
-					if(rc < 0) {
-						return -1;
-					}
-					// Update Checkpoint Region with IMap Piece
-					checkpointRegion->iNodeMaps[pINum/16] = checkpointRegion->logEnd;
-					checkpointRegion->logEnd += 16*sizeof(int);
-					rc = WriteCR();
-					if(rc < 0) {
-						return -1;
-					}
-
-					// Update in Memory INodeMap
-					iNodeMap[pINum] = iNodePointer;
-					// Update INode
-					parentINode->blocks[blockIndex] = checkpointRegion->logEnd + sizeof(INode);
-
-					// Write INode
-					rc = lseek(imageFD, iNodePointer, SEEK_SET);
-					if(rc < 0) {
-						return -1;
-					}
-					rc = write(imageFD, parentINode, sizeof(INode));
-					if(rc < 0) {
-						return -1;
-					}
-					checkpointRegion->logEnd += sizeof(INode);
-					rc = WriteCR();
-					if(rc < 0) {
-						return -1;
-					}
-					// Write Dir Entries Block
-					parentBlock[dirEntIndex].iNum = cINum;
-					sprintf(parentBlock[dirEntIndex].name, cName);
-					rc = lseek(imageFD, checkpointRegion->logEnd, SEEK_SET);
-					if(rc < 0) {
-						return -1;
-					}
-					rc = write(imageFD, parentBlock, MFS_BLOCK_SIZE);
-					if(rc < 0) {
-						return -1;
-					}
-					// Update checkpoint region
-					checkpointRegion->logEnd += MFS_BLOCK_SIZE;
-					rc = WriteCR();
-					if(rc < 0) {
-						return -1;
-					}
-					return 0;
-				}
-				else if(blockIndex == 13 && dirEntIndex == (MFS_BLOCK_SIZE/sizeof(DirEnt))-1) {
-					return -1;
-				}
-			}
-			//}
-		}	
-	}
-	else {
-		return -1;
-	}
-	return 0;
-}
-
 int inodeInit(int type, int size)
 {
     // Parse through Imap and find first free inode number
@@ -301,8 +185,10 @@ int fs_init(int portNum, char* fileSystemImage)
     }
 
     // Set up file (unfinished)
+    int currentInodeNum = 0;
     addr = malloc(sizeof(sockaddr_in));
     cr = malloc(sizeof(CheckpointRegion));
+    inodeMap = malloc(sizeof(int) * 4096);
     if (fs.st_size < sizeof(CheckpointRegion))
     {   /* New file */
 
@@ -320,7 +206,26 @@ int fs_init(int portNum, char* fileSystemImage)
     }
     else
     {   /* Existing file */
-
+        read(imageFD, cr, sizeof(CheckpointRegion));
+        for (int i = 0; i < NUM_INODE_PIECES){
+            int inodeMapPtr = cr->imap[i];
+            if (inodeMapPtr > 0){
+                lseek(imageFD, inodeMapPtr, SEEK_SET);
+                read(imageFD, inodeMap + (16*i), 16*sizeof(int));
+            }
+            else{
+                for (int j = 0; j < 16; j++){
+                    if (inodeMap[(16*(i-1)) + j] == 0){
+                        currentInodeNum = (16*(i-1)) + j;
+                        break;
+                    }
+                }
+                if (currentInodeNum == 0){
+                    currentInodeNum = 16*i;
+                }
+            }
+            break;
+        }
     }
     
     // Recieve requests
