@@ -76,7 +76,7 @@ int inodeInit(int type, int size)
 	}
 
     // Make and add Inode to file image
-	struct INode *node = malloc(sizeof(INode));
+	struct INode* node = malloc(sizeof(INode)); // CRASHES HERE
 	node->type = type;
 	node->size = size;
 	node->blocks[0] = inodePtr + sizeof(INode); // inodePtr -> end of Inode/start of data block
