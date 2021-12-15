@@ -45,6 +45,8 @@ typedef struct CheckpointRegion {
 } CheckpointRegion;
 
 // struct for imap piece
+//takes inode number as input and produces the disk address
+//of the most recent version of the inode
 typedef struct ImapPiece {
     int inodes[IMAP_PIECE_SIZE]; // holds 16 inodes
 } ImapPiece;
