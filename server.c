@@ -211,17 +211,16 @@ int fs_init(int portNum, char* fileSystemImage)
         char buffer[sizeof(MFS_Write_Function)];
         int rc = UDP_Read(sd, &addr, buffer, sizeof(packet));
         int type = *(int *)buffer;
-        if (type == INIT)
+        if (type == LOOKUP)
         {
-            // Why would someone call INIT after already starting the program?
-        }
-        else if (type == LOOKUP)
-        {
-
+            args[0] = strtok(NULL, "~");
+			args[1] = strtok(NULL, "~");
+			MFS_Lookup(atoi(args[0]), args[1]);
         }
         else if (type == STAT)
         {
-            
+            args[0] = strtok(NULL, "~");
+			MFS_Stat(atoi(args[0]));
         }
         else if (type == WRITE)
         {
@@ -244,15 +243,20 @@ int fs_init(int portNum, char* fileSystemImage)
         }
         else if (type == CREAT)
         {
-            
+            args[0] = strtok(NULL, "~");
+			args[1] = strtok(NULL, "~");
+			args[2] = strtok(NULL, "~");
+			MFS_Creat(atoi(args[0]), atoi(args[1]), args[2]);
         }
         else if (type == UNLINK)
         {
-            
+            args[0] = strtok(NULL, "~");
+			args[1] = strtok(NULL, "~");
+			MFS_Unlink(atoi(args[0]), args[1]);
         }
         else if (type == SHUTDOWN)
         {
-            free(cr);
+            MFS_Shutdown(imageFD);
         }
         else
             perror("Invalid request\n");

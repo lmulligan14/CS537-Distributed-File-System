@@ -64,7 +64,7 @@ typedef struct MFS_Write_Function{
     int inum;
     char buffer[4096];
     int block;
-} MFS_Lookup_Function;
+} MFS_Write_Function;
 
 int MFS_Init(char *hostname, int port);
 int MFS_Lookup(int pinum, char *name);
