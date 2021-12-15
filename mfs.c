@@ -16,7 +16,8 @@ int sendRequest(packet* msg, packet* res)
 int MFS_Init(char *hostname, int port)
 {
     sd = UDP_Open(20000);
-    UDP_FillSockAddr(&addr, hostname, port);
+    int rc = UDP_FillSockAddr(&addr, hostname, port);
+    if (rc < 0) return rc;
     return 0;
 }
 
