@@ -25,7 +25,7 @@ main(int argc, char *argv[])
 	//char name[5];
     MFS_Init("localhost", atoi(argv[1]));
     //MFS_Creat(0, MFS_DIRECTORY, "test");
-	char buffer[4096*4]
+	char buffer[4096*4];
     int inum = MFS_Read(0, buffer, 0);
 	printf("%s\n", buffer);
 	printf("iNum %d\n", inum);
@@ -47,7 +47,6 @@ main(int argc, char *argv[])
 
 
 	//MFS_Unlink(0, "test");
-	char *buffer = malloc(4096);
 	MFS_Read(inum, buffer, 0);
 	printf("BUFFER %s\n", buffer);
 	//inum = MFS_Lookup(0, "test");

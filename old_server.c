@@ -1,0 +1,382 @@
+#include <stdio.h>
+#include <stdlib.h>
+#include <sys/stat.h>
+#include <unistd.h>
+#include "udp.h"
+#include "mfs.h"
+#include "requests.h"
+
+struct sockaddr_in *addr;
+struct CheckpointRegion* cr;
+int currentINodeNum;
+int *inodeMap;
+int imageFD;
+
+void updateCR(){
+    //set where to write at the begining
+    int rc = lseek(imageFD, 0, SEEK_SET);
+    //write the checkpoint region to the beginning of the LFS
+    rc = write(imageFD, cr, sizeof(CheckpointRegion));
+    if (rc == -1)
+        perror("Could not update CR\n");
+    //set where to write at the end of the LFS
+    rc = lseek(imageFD, cr->logEnd, SEEK_SET);
+}
+
+int MkINode(int type, int size) {
+	int iNodeMapPointer = cr->imap[currentINodeNum/16];
+	int iNodeMapOffset = currentINodeNum % 16;
+	int *iNodeMapPiece = malloc(16*sizeof(int));
+	int iNodePointer = 0;
+	int rc;
+	if(iNodeMapOffset == 0) {
+		// Write IMap Piece with initial INode
+		iNodeMapPiece[0] = iNodePointer = cr->logEnd + 16*sizeof(int);
+		rc = lseek(imageFD, cr->logEnd, SEEK_SET);
+		if(rc < 0) {
+			return -1;
+		}
+		rc = write(imageFD, iNodeMapPiece, 16*sizeof(int));
+		if(rc < 0) {
+			return -1;
+		}
+		// Update Checkpoint Region with IMap Piece
+		cr->imap[currentINodeNum/16] = cr->logEnd;
+		cr->logEnd += 16*sizeof(int);
+	}
+	else {
+		// Read IMap Piece
+		rc = lseek(imageFD, iNodeMapPointer, SEEK_SET);
+		if(rc < 0) {
+			return -1;
+		}
+		rc = read(imageFD, iNodeMapPiece, 16*sizeof(int));
+		if(rc < 0) {
+			return -1;
+		}
+		// Write INodeNum to IMap Piece
+		iNodeMapPiece[iNodeMapOffset] = iNodePointer = cr->logEnd + 16*sizeof(int);
+		rc = lseek(imageFD, cr->logEnd, SEEK_SET);
+		if(rc < 0) {
+			return -1;
+		}
+		rc = write(imageFD, iNodeMapPiece, 16*sizeof(int));
+		if(rc < 0) {
+			return -1;
+		}
+		// Update Checkpoint Region with IMap Piece
+		cr->imap[currentINodeNum/16] = cr->logEnd;
+		cr->logEnd += 16*sizeof(int);
+		updateCR();
+	}
+	inodeMap[currentINodeNum] = iNodePointer;
+
+	INode *iNode = malloc(sizeof(INode));
+	iNode->type = type;
+	iNode->size = size;
+	if(type == MFS_DIRECTORY) {
+		iNode->blocks[0] = iNodePointer + sizeof(INode);
+	}
+	rc = lseek(imageFD, iNodePointer, SEEK_SET);
+	if(rc < 0) {
+		return -1;
+	}
+	rc = write(imageFD, iNode, sizeof(INode));
+	if(rc < 0) {
+		return -1;
+	}
+
+	cr->logEnd += sizeof(INode);
+	updateCR();
+
+	currentINodeNum++;
+	return currentINodeNum-1;
+}
+
+/*
+int inodeInit(int type, int size)
+{
+    // Parse through Imap and find first free inode number
+    int rc;
+    int inodeNum;
+    int inodeMapPtr;
+    int *mapPiece = malloc(16*sizeof(int));
+    int inodeMapOffset = 0;
+    for (int i = 0; i < NUM_INODE_PIECES; i++)
+    {
+        inodeMapPtr = cr->imap[i];
+        if (inodeMapPtr != -1)
+        {
+            rc = lseek(imageFD, inodeMapPtr, SEEK_SET);
+            rc = read(imageFD, mapPiece, 16*sizeof(int));
+            for (int j = 0; j < IMAP_PIECE_SIZE; j++)
+            {
+                if (mapPiece[j] == -1)
+                {
+                    inodeNum = (i * IMAP_PIECE_SIZE) + j;
+                    inodeMapOffset = j;
+                    break;
+                }
+            }
+        }
+        else
+        {
+            inodeNum = (i * IMAP_PIECE_SIZE);
+            break;
+        }
+    }
+
+    // Update Imap piece and add to file image
+	int inodePtr = 0;
+	if (inodeMapPtr == -1)
+    {   // New Imap piece 
+        for (int i = 0; i < NUM_INODE_PIECES; i++)
+        {
+            mapPiece[i] = -1;
+        }
+		mapPiece[0] = inodePtr = cr->logEnd + 16*sizeof(int);
+		rc = lseek(imageFD, cr->logEnd, SEEK_SET);
+		rc = write(imageFD, mapPiece, 16*sizeof(int));
+		cr->imap[inodeNum/16] = cr->logEnd;
+		cr->logEnd += 16*sizeof(int);
+	}
+	else
+    {   // Existing Imap piece
+		rc = lseek(imageFD, inodeMapPtr, SEEK_SET);
+		rc = read(imageFD, mapPiece, 16*sizeof(int));
+		mapPiece[inodeMapOffset] = inodePtr = cr->logEnd + 16*sizeof(int);
+		rc = lseek(imageFD, cr->logEnd, SEEK_SET);
+		rc = write(imageFD, mapPiece, 16*sizeof(int));
+		cr->imap[inodeNum/16] = cr->logEnd;
+		cr->logEnd += 16*sizeof(int);
+	}
+
+    // Make and add Inode to file image
+	INode* node = malloc(16*sizeof(int)); // CRASHES HERE
+	node->type = type;
+	node->size = size;
+	node->blocks[0] = inodePtr + sizeof(INode); // inodePtr -> end of Inode/start of data block
+	rc = lseek(imageFD, inodePtr, SEEK_SET);
+	rc = write(imageFD, node, sizeof(INode));
+    if (rc == -1)
+        perror("Error");
+    cr->logEnd += sizeof(INode);
+
+	updateCR();
+    //free(mapPiece);
+    //free(node);
+	return inodeNum;
+}*/
+
+int dirInit(int pInum, char *name)
+{
+    int inodeNum = MkINode(MFS_DIRECTORY, sizeof(DirBlock));
+    DirBlock *block = malloc(sizeof(DirBlock));
+
+    // Curr dir
+    sprintf(block->entries[0].name, ".");
+    block->entries[0].inum = inodeNum;
+
+    // Parent dir
+    sprintf(block->entries[1].name, "..");
+    if (pInum == -1) // root dir (no parent)
+        block->entries[1].inum = inodeNum;
+    else
+        block->entries[1].inum = pInum;
+    
+    // Set unused entries
+    for (int i = 2; i < (MFS_BLOCK_SIZE/sizeof(MFS_DirEnt_t)); i++){
+        block->entries[i].inum = -1;
+    }
+
+    // Write to file image
+    int rc = lseek(imageFD, cr->logEnd, SEEK_SET);
+    rc = write(imageFD, block, MFS_BLOCK_SIZE);
+    if (rc == -1)
+        perror("Error");
+    cr->logEnd += MFS_BLOCK_SIZE;
+
+    //free(block);
+    updateCR();
+    return 0;
+}
+
+int fs_read(int inum, char* buffer, int block)
+{
+    int pieceNum = inum / 16;
+    int inodePtr;
+
+    // Check for valid args
+    if (inum < 0 || inum > MAX_NUM_INODES)
+        perror("Invalid Inode number\n");
+    if (cr->imap[pieceNum] == -1)
+        perror("Invalid Inode number\n");
+    if (block < 0 || block > 13)
+        perror("Invalid block number\n");
+
+    // Find and allocate Imap piece
+    ImapPiece* mapPiece = malloc(sizeof(ImapPiece));
+    lseek(imageFD, cr->imap[pieceNum], SEEK_SET);
+    read(imageFD, mapPiece, sizeof(ImapPiece));
+    inodePtr = mapPiece->inodes[inum%16];
+    if (inodePtr == -1)
+        perror("Invalid Inode number\n");
+
+    // Find and allocate inode
+    INode* inode = malloc(sizeof(INode));
+    lseek(imageFD, inodePtr, SEEK_SET);
+    read(imageFD, inode, sizeof(INode));
+
+    // Find and read block into buffer
+    lseek(imageFD, inode->blocks[block], SEEK_SET);
+    read(imageFD, buffer, MFS_BLOCK_SIZE);
+
+    //free(mapPiece);
+    //free(inode);
+    return 0;
+}
+
+// Initialize file system (code from main)
+int fs_init(int portNum, char* fileSystemImage)
+{
+    int sd = UDP_Open(portNum);
+    imageFD = open(fileSystemImage, O_CREAT | O_RDWR);
+
+    // Check if file is valid
+    if (imageFD < 0 || sd < 0)
+    {
+        perror("Could not open file\n");
+	    return -1;
+    }
+
+    // Make a copy
+    struct stat fs;
+    if (fstat(imageFD, &fs) < 0)
+    {
+        perror("Could not open file\n");
+	    return -1;
+    }
+
+    // Set up file (unfinished)
+    int currentInodeNum = 0;
+    addr = malloc(sizeof(struct sockaddr_in));
+    cr = malloc(sizeof(CheckpointRegion));
+    inodeMap = malloc(sizeof(int) * 4096);
+    if (fs.st_size < sizeof(CheckpointRegion))
+    {   /* New file */
+
+	    // Set up checkpoint region
+        cr->logEnd = sizeof(CheckpointRegion);
+        for (int i = 0; i < NUM_INODE_PIECES; i++)
+        {
+            cr->imap[i] = -1;
+        }
+        updateCR();
+	    // Make the root directory
+        dirInit(-1, "root");
+        printf("server:: new file image created\n");
+        fsync(imageFD);
+    }
+    else
+    {   /* Existing file */
+        read(imageFD, cr, sizeof(CheckpointRegion));
+        for (int i = 0; i < NUM_INODE_PIECES; i++){
+            int inodeMapPtr = cr->imap[i];
+            if (inodeMapPtr > 0){
+                lseek(imageFD, inodeMapPtr, SEEK_SET);
+                read(imageFD, inodeMap + (16*i), 16*sizeof(int));
+            }
+            else{
+                for (int j = 0; j < 16; j++){
+                    if (inodeMap[(16*(i-1)) + j] == 0){
+                        currentInodeNum = (16*(i-1)) + j;
+                        break;
+                    }
+                }
+                if (currentInodeNum == 0){
+                    currentInodeNum = 16*i;
+                }
+            }
+            break;
+        }
+    }
+    
+    // Recieve requests
+    printf("server:: waiting...\n");
+    UDP_Packet buf_pk;
+    UDP_Packet rx_pk;
+    while (1) {
+    if( UDP_Read(sd, &addr, (char *)&buf_pk, sizeof(UDP_Packet)) < 1)
+      continue;
+
+
+    if (buf_pk.request == REQ_LOOKUP){
+      rx_pk.inum = server_lookup(buf_pk.inum, buf_pk.name);
+      rx_pk.request = REQ_RESPONSE;
+      UDP_Write(sd, &addr, (char*)&rx_pk, sizeof(UDP_Packet));
+
+    }
+    else if(buf_pk.request == REQ_STAT){
+      rx_pk.inum = server_stat(buf_pk.inum, &(rx_pk.stat));
+      rx_pk.request = REQ_RESPONSE;
+      UDP_Write(sd, &addr, (char*)&rx_pk, sizeof(UDP_Packet));
+
+    }
+    else if(buf_pk.request == REQ_WRITE){
+      rx_pk.inum = server_write(buf_pk.inum, buf_pk.buffer, buf_pk.block);
+      rx_pk.request = REQ_RESPONSE;
+      UDP_Write(sd, &addr, (char*)&rx_pk, sizeof(UDP_Packet));
+
+    }
+    else if(buf_pk.request == REQ_READ){
+      rx_pk.inum = server_read(buf_pk.inum, rx_pk.buffer, buf_pk.block);
+      rx_pk.request = REQ_RESPONSE;
+      UDP_Write(sd, &addr, (char*)&rx_pk, sizeof(UDP_Packet));
+
+    }
+    else if(buf_pk.request == REQ_CREAT){
+      rx_pk.inum = server_creat(buf_pk.inum, buf_pk.type, buf_pk.name);
+      rx_pk.request = REQ_RESPONSE;
+      UDP_Write(sd, &addr, (char*)&rx_pk, sizeof(UDP_Packet));
+
+    }
+    else if(buf_pk.request == REQ_UNLINK){
+      rx_pk.inum = server_unlink(buf_pk.inum, buf_pk.name);
+      rx_pk.request = REQ_RESPONSE;
+      UDP_Write(sd, &addr, (char*)&rx_pk, sizeof(UDP_Packet));
+
+    }
+    else if(buf_pk.request == REQ_SHUTDOWN) {
+      rx_pk.request = REQ_RESPONSE;
+      UDP_Write(sd, &addr, (char*)&rx_pk, sizeof(UDP_Packet));
+      server_shutdown();
+    }
+    else if(buf_pk.request == REQ_RESPONSE) {
+      rx_pk.request = REQ_RESPONSE;
+      UDP_Write(sd, &addr, (char*)&rx_pk, sizeof(UDP_Packet));
+    }
+    else {
+      perror("server_init: unknown request");
+      return -1;
+    }
+
+    //free(cr);
+    //free(addr);
+    //free(inodeMap);
+    return 0;
+    }
+}
+
+// server code
+int main(int argc, char *argv[]) 
+{
+    if (argc != 3)
+    {
+        perror("Incorrect usage of server\n");
+        return 0;
+    }
+
+    fs_init(atoi(argv[1]), argv[2]);
+
+    return 0;
+}

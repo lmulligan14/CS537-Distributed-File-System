@@ -16,13 +16,6 @@
 
 #include "mfs.h"
 
-
-
-
-
-
-
-
 int UDP_Send( UDP_Packet *tx, UDP_Packet *rx, char *hostname, int port)
 {
 
@@ -102,7 +95,7 @@ int MFS_Lookup(int pinum, char *name){
 	  return rx.inum;
 }
 
-int MFS_Stat(int inum, MFS_Stat_t *m) {
+int MFS_Stat(int inum, Stat *m) {
 	if(!online)
 		return -1;
 
