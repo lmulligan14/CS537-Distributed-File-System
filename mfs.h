@@ -34,7 +34,7 @@ typedef struct __MFS_DirEnt_t {
 } DirEnt;
 
 // struct message/packet
-typedef struct __UDP_Packet {
+typedef struct Packet {
 	enum MFS_REQ request;
 
 	int inum;
@@ -44,7 +44,7 @@ typedef struct __UDP_Packet {
 	char name[LEN_NAME];
 	char buffer[MFS_BLOCK_SIZE];
 	Stat stat;
-} UDP_Packet;
+} Packet;
 
 
 // struct for INode

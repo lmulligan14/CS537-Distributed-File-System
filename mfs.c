@@ -16,7 +16,7 @@
 
 #include "mfs.h"
 
-int UDP_Send( UDP_Packet *tx, UDP_Packet *rx, char *hostname, int port)
+int UDP_Send( Packet *tx, Packet *rx, char *hostname, int port)
 {
 
     int sd = UDP_Open(0);
@@ -43,10 +43,10 @@ int UDP_Send( UDP_Packet *tx, UDP_Packet *rx, char *hostname, int port)
     do {
         FD_ZERO(&rfds);
         FD_SET(sd,&rfds);
-        UDP_Write(sd, &addr, (char*)tx, sizeof(UDP_Packet));
+        UDP_Write(sd, &addr, (char*)tx, sizeof(Packet));
         if(select(sd+1, &rfds, NULL, NULL, &tv))
         {
-            rc = UDP_Read(sd, &addr2, (char*)rx, sizeof(UDP_Packet));
+            rc = UDP_Read(sd, &addr2, (char*)rx, sizeof(Packet));
             if(rc > 0)
             {
                 UDP_Close(sd);
@@ -81,8 +81,8 @@ int MFS_Lookup(int pinum, char *name){
 	if(strlen(name) > 60 || name == NULL)
 		return -1;
 
-	UDP_Packet tx;
-	UDP_Packet rx;
+	Packet tx;
+	Packet rx;
 
 	tx.inum = pinum;
 	tx.request = REQ_LOOKUP;
@@ -99,12 +99,12 @@ int MFS_Stat(int inum, Stat *m) {
 	if(!online)
 		return -1;
 
-	UDP_Packet tx;
+	Packet tx;
 	tx.inum = inum;
 	tx.request = REQ_STAT;
 
 
-	UDP_Packet rx;
+	Packet rx;
 	if(UDP_Send( &tx, &rx, server_host, server_port) < 0)
 		return -1;
 	m->type = rx.stat.type;
@@ -118,8 +118,8 @@ int MFS_Write(int inum, char *buffer, int block){
 	if(!online)
 		return -1;
 	
-	UDP_Packet tx;
-	UDP_Packet rx;
+	Packet tx;
+	Packet rx;
 
 	tx.inum = inum;
 
@@ -140,14 +140,14 @@ int MFS_Read(int inum, char *buffer, int block){
   if(!online)
     return -1;
 	
-  UDP_Packet tx;
+  Packet tx;
 
 
   tx.inum = inum;
   tx.block = block;
   tx.request = REQ_READ;
 
-  UDP_Packet rx;	
+  Packet rx;	
   if(UDP_Send( &tx, &rx, server_host, server_port) < 0)
     return -1;
 
@@ -168,14 +168,14 @@ int MFS_Creat(int pinum, int type, char *name){
 	if(strlen(name) > 60 || name == NULL)
 		return -1;
 
-	UDP_Packet tx;
+	Packet tx;
 
 	strcpy(tx.name, name);
 	tx.inum = pinum;
 	tx.type = type;
 	tx.request = REQ_CREAT;
 
-	UDP_Packet rx;	
+	Packet rx;	
 	if(UDP_Send( &tx, &rx, server_host, server_port) < 0)
 		return -1;
 
@@ -189,13 +189,13 @@ int MFS_Unlink(int pinum, char *name){
 	if(strlen(name) > 60 || name == NULL)
 		return -1;
 	
-	UDP_Packet tx;
+	Packet tx;
 
 	tx.inum = pinum;
 	tx.request = REQ_UNLINK;
 	strcpy(tx.name, name);
 
-	UDP_Packet rx;	
+	Packet rx;	
 	if(UDP_Send( &tx, &rx,server_host, server_port ) < 0)
 		return -1;
 
@@ -203,10 +203,10 @@ int MFS_Unlink(int pinum, char *name){
 }
 
 int MFS_Shutdown(){
-  UDP_Packet tx;
+  Packet tx;
 	tx.request = REQ_SHUTDOWN;
 
-	UDP_Packet rx;
+	Packet rx;
 	if(UDP_Send( &tx, &rx,server_host, server_port) < 0)
 		return -1;
 	

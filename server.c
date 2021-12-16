@@ -3,10 +3,8 @@
 #include "udp.h"
 #include "mfs.h"
 
-#define BUFFER_SIZE (4096)
-
 int sd, rc, imageFD, currentINodeNum;
-struct sockaddr_in *s;
+struct sockaddr_in *addr;
 CheckReg *checkpointRegion;
 int *iNodeMap; // The full INode Map stored in memory
 
@@ -455,7 +453,7 @@ int ReadFile(int iNum, char *buffer, int block) {
 }
 
 void FS_Lookup(int pINum, char *name) {
-  UDP_Packet rx_pk;
+  Packet reply;
 	int retCode = -1;		
 	INode *iNode = GetINode(pINum);
 	if(iNode != NULL && iNode->type == MFS_DIRECTORY) {
@@ -463,13 +461,13 @@ void FS_Lookup(int pINum, char *name) {
 	}
 
 	fsync(imageFD);
-  rx_pk.inum = retCode;
-  rx_pk.request = REQ_RESPONSE;
-  rc = UDP_Write(sd, s, (char*)&rx_pk, sizeof(UDP_Packet));
+  reply.inum = retCode;
+  reply.request = REQ_RESPONSE;
+  rc = UDP_Write(sd, addr, (char*)&reply, sizeof(Packet));
 }
 
 void FS_Stat(int iNum){
-  UDP_Packet rx_pk;
+  Packet reply;
 	int retCode = -1;
     Stat *stat = malloc(sizeof(Stat));
 	INode *iNode = GetINode(iNum);
@@ -479,15 +477,15 @@ void FS_Stat(int iNum){
 	}
 
 	fsync(imageFD);
-  rx_pk.stat.size = stat->size;
-  rx_pk.stat.type = stat->type;
-  rx_pk.inum = retCode;
-  rx_pk.request= REQ_RESPONSE;
-  rc = UDP_Write(sd, s, (char*)&rx_pk, sizeof(UDP_Packet));
+  reply.stat.size = stat->size;
+  reply.stat.type = stat->type;
+  reply.inum = retCode;
+  reply.request= REQ_RESPONSE;
+  rc = UDP_Write(sd, addr, (char*)&reply, sizeof(Packet));
 }
 
 void FS_Write(int iNum, char *buffer, int block) {
-  UDP_Packet rx_pk;
+  Packet reply;
 	int retCode = -1;		
 	
 	if(block >= 0 && block < 14) {
@@ -495,29 +493,29 @@ void FS_Write(int iNum, char *buffer, int block) {
 	}
 
 	fsync(imageFD);
-  rx_pk.inum = retCode;
-  rx_pk.request= REQ_RESPONSE;
-  rc = UDP_Write(sd, s, (char*)&rx_pk, sizeof(UDP_Packet));
+  reply.inum = retCode;
+  reply.request= REQ_RESPONSE;
+  rc = UDP_Write(sd, addr, (char*)&reply, sizeof(Packet));
 
 }
 
 void FS_Read(int iNum, int block) {
-  UDP_Packet rx_pk;
+  Packet reply;
 	int retCode = -1;
-	char *buffer = malloc(BUFFER_SIZE);
+	char *buffer = malloc(MFS_BLOCK_SIZE);
 	if(block >= 0 && block < 14) {
 		retCode = ReadFile(iNum, buffer, block);
 	}
 
 	fsync(imageFD);
-	memcpy(rx_pk.buffer, buffer, BUFFER_SIZE);
-  rx_pk.inum = retCode;
-  rx_pk.request= REQ_RESPONSE;
-  rc = UDP_Write(sd, s, (char*)&rx_pk, sizeof(UDP_Packet));
+	memcpy(reply.buffer, buffer, MFS_BLOCK_SIZE);
+  reply.inum = retCode;
+  reply.request= REQ_RESPONSE;
+  rc = UDP_Write(sd, addr, (char*)&reply, sizeof(Packet));
 }
 
 void FS_Creat(int pINum, int type, char *name) {
-  UDP_Packet rx_pk;
+  Packet reply;
 	int retCode = -1;	
 	if(strlen(name) <= 28) {
 		if(type == MFS_REGULAR_FILE) {
@@ -528,13 +526,13 @@ void FS_Creat(int pINum, int type, char *name) {
 		}
 	}
 	fsync(imageFD);
-  rx_pk.inum = retCode;
-  rx_pk.request= REQ_RESPONSE;
-  rc = UDP_Write(sd, s, (char*)&rx_pk, sizeof(UDP_Packet));
+  reply.inum = retCode;
+  reply.request= REQ_RESPONSE;
+  rc = UDP_Write(sd, addr, (char*)&reply, sizeof(Packet));
 }
 
 void FS_Unlink(int pINum, char *name) {
-  UDP_Packet rx_pk;
+  Packet reply;
 	int retCode = -1;
 	int iNum = GetParentDirEnt(pINum, name);
 	if(iNum >= 0) {
@@ -548,15 +546,15 @@ void FS_Unlink(int pINum, char *name) {
 	}
 
 	fsync(imageFD);
-  rx_pk.inum = retCode;
-  rx_pk.request= REQ_RESPONSE;
-  rc = UDP_Write(sd, s, (char*)&rx_pk, sizeof(UDP_Packet));
+  reply.inum = retCode;
+  reply.request= REQ_RESPONSE;
+  rc = UDP_Write(sd, addr, (char*)&reply, sizeof(Packet));
 }
 
 void FS_Shutdown(int fd) {
-  UDP_Packet rx_pk;
-  rx_pk.request = REQ_RESPONSE;
-  UDP_Write(sd, s, (char*)&rx_pk, sizeof(UDP_Packet));
+  Packet reply;
+  reply.request = REQ_RESPONSE;
+  UDP_Write(sd, addr, (char*)&reply, sizeof(Packet));
 	fsync(fd);
 	close(fd);
 	exit(0);
@@ -578,7 +576,7 @@ main(int argc, char *argv[])
 	assert(imageFD >= 0);
 
 	currentINodeNum = 0;
-	s = malloc(sizeof(struct sockaddr_in));
+	addr = malloc(sizeof(struct sockaddr_in));
 	checkpointRegion = malloc(sizeof(CheckReg));
 	iNodeMap = malloc(4096*sizeof(int));
 	struct stat imageStat;
@@ -615,37 +613,37 @@ main(int argc, char *argv[])
 
     printf("waiting in loop\n");
 
-    UDP_Packet buf_pk;
+    Packet msg;
     while (1) 
     {
-      int rc = UDP_Read(sd, s, (char *)&buf_pk, sizeof(UDP_Packet));
+      int rc = UDP_Read(sd, addr, (char *)&msg, sizeof(Packet));
       if (rc > 0) 
       {
-        if (buf_pk.request == REQ_LOOKUP)
+        if (msg.request == REQ_LOOKUP)
         {
-          FS_Lookup(buf_pk.inum, buf_pk.name);
+          FS_Lookup(msg.inum, msg.name);
         }
-        else if(buf_pk.request == REQ_STAT)
+        else if(msg.request == REQ_STAT)
         {
-          FS_Stat(buf_pk.inum);
+          FS_Stat(msg.inum);
         }
-        else if(buf_pk.request == REQ_WRITE)
+        else if(msg.request == REQ_WRITE)
         {
-          FS_Write(buf_pk.inum, buf_pk.buffer, buf_pk.block);
+          FS_Write(msg.inum, msg.buffer, msg.block);
         }
-        else if(buf_pk.request == REQ_READ)
+        else if(msg.request == REQ_READ)
         {
-          FS_Read(buf_pk.inum, buf_pk.block);
+          FS_Read(msg.inum, msg.block);
         }
-        else if(buf_pk.request == REQ_CREAT)
+        else if(msg.request == REQ_CREAT)
         {
-          FS_Creat(buf_pk.inum, buf_pk.type, buf_pk.name);
+          FS_Creat(msg.inum, msg.type, msg.name);
         }
-        else if(buf_pk.request == REQ_UNLINK)
+        else if(msg.request == REQ_UNLINK)
         {
-          FS_Unlink(buf_pk.inum, buf_pk.name);
+          FS_Unlink(msg.inum, msg.name);
         }
-        else if(buf_pk.request == REQ_SHUTDOWN) 
+        else if(msg.request == REQ_SHUTDOWN) 
         {
           FS_Shutdown(imageFD);
         }
