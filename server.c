@@ -8,6 +8,7 @@
 
 struct sockaddr_in *addr;
 struct CheckpointRegion* cr;
+int currentINodeNum;
 int *inodeMap;
 int imageFD;
 
@@ -22,13 +23,84 @@ void updateCR(){
     rc = lseek(imageFD, cr->logEnd, SEEK_SET);
 }
 
+int MkINode(int type, int size) {
+	int iNodeMapPointer = cr->imap[currentINodeNum/16];
+	int iNodeMapOffset = currentINodeNum % 16;
+	int *iNodeMapPiece = malloc(16*sizeof(int));
+	int iNodePointer = 0;
+	int rc;
+	if(iNodeMapOffset == 0) {
+		// Write IMap Piece with initial INode
+		iNodeMapPiece[0] = iNodePointer = cr->logEnd + 16*sizeof(int);
+		rc = lseek(imageFD, cr->logEnd, SEEK_SET);
+		if(rc < 0) {
+			return -1;
+		}
+		rc = write(imageFD, iNodeMapPiece, 16*sizeof(int));
+		if(rc < 0) {
+			return -1;
+		}
+		// Update Checkpoint Region with IMap Piece
+		cr->imap[currentINodeNum/16] = cr->logEnd;
+		cr->logEnd += 16*sizeof(int);
+	}
+	else {
+		// Read IMap Piece
+		rc = lseek(imageFD, iNodeMapPointer, SEEK_SET);
+		if(rc < 0) {
+			return -1;
+		}
+		rc = read(imageFD, iNodeMapPiece, 16*sizeof(int));
+		if(rc < 0) {
+			return -1;
+		}
+		// Write INodeNum to IMap Piece
+		iNodeMapPiece[iNodeMapOffset] = iNodePointer = cr->logEnd + 16*sizeof(int);
+		rc = lseek(imageFD, cr->logEnd, SEEK_SET);
+		if(rc < 0) {
+			return -1;
+		}
+		rc = write(imageFD, iNodeMapPiece, 16*sizeof(int));
+		if(rc < 0) {
+			return -1;
+		}
+		// Update Checkpoint Region with IMap Piece
+		cr->imap[currentINodeNum/16] = cr->logEnd;
+		cr->logEnd += 16*sizeof(int);
+		updateCR();
+	}
+	inodeMap[currentINodeNum] = iNodePointer;
+
+	INode *iNode = malloc(sizeof(INode));
+	iNode->type = type;
+	iNode->size = size;
+	if(type == MFS_DIRECTORY) {
+		iNode->blocks[0] = iNodePointer + sizeof(INode);
+	}
+	rc = lseek(imageFD, iNodePointer, SEEK_SET);
+	if(rc < 0) {
+		return -1;
+	}
+	rc = write(imageFD, iNode, sizeof(INode));
+	if(rc < 0) {
+		return -1;
+	}
+
+	cr->logEnd += sizeof(INode);
+	updateCR();
+
+	currentINodeNum++;
+	return currentINodeNum-1;
+}
+
+/*
 int inodeInit(int type, int size)
 {
     // Parse through Imap and find first free inode number
     int rc;
     int inodeNum;
     int inodeMapPtr;
-    struct ImapPiece* mapPiece = malloc(sizeof(ImapPiece));
+    int *mapPiece = malloc(16*sizeof(int));
     int inodeMapOffset = 0;
     for (int i = 0; i < NUM_INODE_PIECES; i++)
     {
@@ -36,10 +108,10 @@ int inodeInit(int type, int size)
         if (inodeMapPtr != -1)
         {
             rc = lseek(imageFD, inodeMapPtr, SEEK_SET);
-            rc = read(imageFD, mapPiece, sizeof(ImapPiece));
+            rc = read(imageFD, mapPiece, 16*sizeof(int));
             for (int j = 0; j < IMAP_PIECE_SIZE; j++)
             {
-                if (mapPiece->inodes[j] == -1)
+                if (mapPiece[j] == -1)
                 {
                     inodeNum = (i * IMAP_PIECE_SIZE) + j;
                     inodeMapOffset = j;
@@ -57,30 +129,30 @@ int inodeInit(int type, int size)
     // Update Imap piece and add to file image
 	int inodePtr = 0;
 	if (inodeMapPtr == -1)
-    {   /* New Imap piece */
+    {   // New Imap piece 
         for (int i = 0; i < NUM_INODE_PIECES; i++)
         {
-            mapPiece->inodes[i] = -1;
+            mapPiece[i] = -1;
         }
-		mapPiece->inodes[0] = inodePtr = cr->logEnd + sizeof(struct ImapPiece);
+		mapPiece[0] = inodePtr = cr->logEnd + 16*sizeof(int);
 		rc = lseek(imageFD, cr->logEnd, SEEK_SET);
-		rc = write(imageFD, mapPiece, sizeof(struct ImapPiece));
+		rc = write(imageFD, mapPiece, 16*sizeof(int));
 		cr->imap[inodeNum/16] = cr->logEnd;
-		cr->logEnd += sizeof(struct ImapPiece);
+		cr->logEnd += 16*sizeof(int);
 	}
 	else
-    {   /* Existing Imap piece */
+    {   // Existing Imap piece
 		rc = lseek(imageFD, inodeMapPtr, SEEK_SET);
-		rc = read(imageFD, mapPiece, sizeof(struct ImapPiece));
-		mapPiece->inodes[inodeMapOffset] = inodePtr = cr->logEnd + sizeof(struct ImapPiece);
+		rc = read(imageFD, mapPiece, 16*sizeof(int));
+		mapPiece[inodeMapOffset] = inodePtr = cr->logEnd + 16*sizeof(int);
 		rc = lseek(imageFD, cr->logEnd, SEEK_SET);
-		rc = write(imageFD, mapPiece, sizeof(struct ImapPiece));
+		rc = write(imageFD, mapPiece, 16*sizeof(int));
 		cr->imap[inodeNum/16] = cr->logEnd;
-		cr->logEnd += sizeof(struct ImapPiece);
+		cr->logEnd += 16*sizeof(int);
 	}
 
     // Make and add Inode to file image
-	struct INode* node = malloc(sizeof(INode)); // CRASHES HERE
+	INode* node = malloc(16*sizeof(int)); // CRASHES HERE
 	node->type = type;
 	node->size = size;
 	node->blocks[0] = inodePtr + sizeof(INode); // inodePtr -> end of Inode/start of data block
@@ -91,14 +163,14 @@ int inodeInit(int type, int size)
     cr->logEnd += sizeof(INode);
 
 	updateCR();
-    free(mapPiece);
-    free(node);
+    //free(mapPiece);
+    //free(node);
 	return inodeNum;
-}
+}*/
 
 int dirInit(int pInum, char *name)
 {
-    int inodeNum = inodeInit(MFS_DIRECTORY, sizeof(DirBlock));
+    int inodeNum = MkINode(MFS_DIRECTORY, sizeof(DirBlock));
     DirBlock *block = malloc(sizeof(DirBlock));
 
     // Curr dir
@@ -124,7 +196,7 @@ int dirInit(int pInum, char *name)
         perror("Error");
     cr->logEnd += MFS_BLOCK_SIZE;
 
-    free(block);
+    //free(block);
     updateCR();
     return 0;
 }
@@ -159,6 +231,8 @@ int fs_read(int inum, char* buffer, int block)
     lseek(imageFD, inode->blocks[block], SEEK_SET);
     read(imageFD, buffer, MFS_BLOCK_SIZE);
 
+    //free(mapPiece);
+    //free(inode);
     return 0;
 }
 
@@ -278,6 +352,9 @@ int fs_init(int portNum, char* fileSystemImage)
             perror("Invalid request\n");
     }
 
+    //free(cr);
+    //free(addr);
+    //free(inodeMap);
     return 0;
 }
 
