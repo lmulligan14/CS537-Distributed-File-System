@@ -166,7 +166,6 @@ int fs_read(int inum, char* buffer, int block)
 int fs_init(int portNum, char* fileSystemImage)
 {
     int sd = UDP_Open(portNum);
-    UDP_FillSockAddr(addr, "localhost", portNum);
     imageFD = open(fileSystemImage, O_CREAT | O_RDWR);
 
     // Check if file is valid
@@ -238,7 +237,7 @@ int fs_init(int portNum, char* fileSystemImage)
         int type = *(int *)buffer;
         if (type == LOOKUP)
         {
-    
+            printf("got to lookup");
         }
         else if (type == STAT)
         {
