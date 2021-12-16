@@ -325,61 +325,61 @@ int fs_init(int portNum, char* fileSystemImage)
     
     // Recieve requests
     printf("server:: waiting...\n");
-    packet msg;
-    while (1)
-    {
-        char buffer[sizeof(MFS_Write_Function)];
-        int rc = UDP_Read(sd, addr, buffer, sizeof(packet));
-        int type = *(int *)buffer;
-        if (type == LOOKUP)
-        {
-            args[0] = strtok(NULL, "~");
-			args[1] = strtok(NULL, "~");
-			MFS_Lookup(atoi(args[0]), args[1]);
-        }
-        else if (type == STAT)
-        {
-            args[0] = strtok(NULL, "~");
-			MFS_Stat(atoi(args[0]));
-        }
-        else if (type == WRITE)
-        {
-            printf("server:: read message [size:%d contents:(%s)]\n", rc, msg.block);
+    UDP_Packet buf_pk;
+    UDP_Packet rx_pk;
+    while (1) {
+    if( UDP_Read(sd, &s, (char *)&buf_pk, sizeof(UDP_Packet)) < 1)
+      continue;
 
-            packet res;
-            char reply[1000];
-            sprintf(reply, "goodbye world");
-            memcpy(res.block, reply, MFS_BLOCK_SIZE);
-            UDP_Write(sd, addr, reply, sizeof(packet));
-        }
-        else if (type == READ)
-        {
-            packet res;
-            char buffer[MFS_BLOCK_SIZE];
 
-            fs_read(msg.inum, buffer, msg.blocknum);
-            memcpy(res.block, buffer, MFS_BLOCK_SIZE);
-            UDP_Write(sd, addr, (char*) &res, sizeof(packet));
-        }
-        else if (type == CREAT)
-        {
-            args[0] = strtok(NULL, "~");
-			args[1] = strtok(NULL, "~");
-			args[2] = strtok(NULL, "~");
-			MFS_Creat(atoi(args[0]), atoi(args[1]), args[2]);
-        }
-        else if (type == UNLINK)
-        {
-            args[0] = strtok(NULL, "~");
-			args[1] = strtok(NULL, "~");
-			MFS_Unlink(atoi(args[0]), args[1]);
-        }
-        else if (type == SHUTDOWN)
-        {
-            MFS_Shutdown(imageFD);
-        }
-        else
-            perror("Invalid request\n");
+    if (tx.request == REQ_LOOKUP){
+      rx_pk.inum = server_lookup(buf_pk.inum, buf_pk.name);
+      rx_pk.request = REQ_RESPONSE;
+      UDP_Write(sd, &s, (char*)&rx_pk, sizeof(UDP_Packet));
+
+    }
+    else if(buf_pk.request == REQ_STAT){
+      rx_pk.inum = server_stat(buf_pk.inum, &(rx_pk.stat));
+      rx_pk.request = REQ_RESPONSE;
+      UDP_Write(sd, &s, (char*)&rx_pk, sizeof(UDP_Packet));
+
+    }
+    else if(buf_pk.request == REQ_WRITE){
+      rx_pk.inum = server_write(buf_pk.inum, buf_pk.buffer, buf_pk.block);
+      rx_pk.request = REQ_RESPONSE;
+      UDP_Write(sd, &s, (char*)&rx_pk, sizeof(UDP_Packet));
+
+    }
+    else if(buf_pk.request == REQ_READ){
+      rx_pk.inum = server_read(buf_pk.inum, rx_pk.buffer, buf_pk.block);
+      rx_pk.request = REQ_RESPONSE;
+      UDP_Write(sd, &s, (char*)&rx_pk, sizeof(UDP_Packet));
+
+    }
+    else if(buf_pk.request == REQ_CREAT){
+      rx_pk.inum = server_creat(buf_pk.inum, buf_pk.type, buf_pk.name);
+      rx_pk.request = REQ_RESPONSE;
+      UDP_Write(sd, &s, (char*)&rx_pk, sizeof(UDP_Packet));
+
+    }
+    else if(buf_pk.request == REQ_UNLINK){
+      rx_pk.inum = server_unlink(buf_pk.inum, buf_pk.name);
+      rx_pk.request = REQ_RESPONSE;
+      UDP_Write(sd, &s, (char*)&rx_pk, sizeof(UDP_Packet));
+
+    }
+    else if(buf_pk.request == REQ_SHUTDOWN) {
+      rx_pk.request = REQ_RESPONSE;
+      UDP_Write(sd, &s, (char*)&rx_pk, sizeof(UDP_Packet));
+      server_shutdown();
+    }
+    else if(buf_pk.request == REQ_RESPONSE) {
+      rx_pk.request = REQ_RESPONSE;
+      UDP_Write(sd, &s, (char*)&rx_pk, sizeof(UDP_Packet));
+    }
+    else {
+      perror("server_init: unknown request");
+      return -1;
     }
 
     return 0;
