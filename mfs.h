@@ -9,6 +9,18 @@
 #define IMAP_PIECE_SIZE  (16)
 #define NUM_INODE_PIECES (MAX_NUM_INODES/IMAP_PIECE_SIZE) // 256
 
+enum MFS_REQ {
+  REQ_INIT,
+  REQ_LOOKUP,
+  REQ_STAT,
+  REQ_WRITE,
+  REQ_READ,
+  REQ_CREAT,
+  REQ_UNLINK,
+  REQ_RESPONSE,
+  REQ_SHUTDOWN
+};
+
 typedef struct __MFS_Stat_t {
     int type;   // MFS_DIRECTORY or MFS_REGULAR
     int size;   // bytes
@@ -21,15 +33,18 @@ typedef struct __MFS_DirEnt_t {
 } MFS_DirEnt_t;
 
 // struct message/packet
-typedef struct packet {
-    int request;
-    char block[MFS_BLOCK_SIZE];
-    int inum;
-    int blocknum;
-    char name[64];
-    int type;
-    MFS_Stat_t stat;
-} packet;
+typedef struct __UDP_Packet {
+	enum MFS_REQ request;
+
+	int inum;
+	int block;
+	int type;
+
+	char name[LEN_NAME];
+	char buffer[MFS_BLOCK_SIZE];
+	MFS_Stat_t stat;
+} UDP_Packet;
+
 
 // struct for INode
 typedef struct INode {
