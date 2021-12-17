@@ -10,6 +10,10 @@
 #include "structures.h"
 #include "mfs.h"
 
+char* server_host = NULL;
+int server_port = 3000;
+int online = 0;
+
 int sendRequest( Packet *msg, Packet *rep, char *hostname, int port)
 {
 
@@ -52,16 +56,9 @@ int sendRequest( Packet *msg, Packet *rep, char *hostname, int port)
     }while(1);
 }
 
-/******************** MFS start ********************/
-
-char* server_host = NULL;
-int server_port = 3000;
-int online = 0;
-
-
 
 int MFS_Init(char *hostname, int port) {
-	server_host = strdup(hostname); /* gw: tbc dubious  */
+	server_host = strdup(hostname);
 	server_port = port;
 	online = 1;
 	return 0;
