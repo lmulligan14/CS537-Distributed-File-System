@@ -22,11 +22,9 @@ enum MFS_REQ {
 // struct message/packet
 typedef struct Packet {
 	enum MFS_REQ request;
-
 	int inum;
 	int block;
 	int type;
-
 	char name[64];
 	char buffer[MFS_BLOCK_SIZE];
 	MFS_Stat_t stat;

@@ -11,8 +11,8 @@
 #include "mfs.h"
 
 char* server_host = NULL;
-int server_port = 3000;
-int online = 0;
+int server_port = 2000;
+int isUp = 0;
 
 int sendRequest( Packet *msg, Packet *rep, char *hostname, int port)
 {
@@ -38,7 +38,8 @@ int sendRequest( Packet *msg, Packet *rep, char *hostname, int port)
     tv.tv_usec=0;
 
     int trial_limit = 5;	/* trial = 5 */
-    do {
+    do 
+	{
         FD_ZERO(&rfds);
         FD_SET(sd,&rfds);
         UDP_Write(sd, &addr, (char*)msg, sizeof(Packet));
@@ -50,55 +51,56 @@ int sendRequest( Packet *msg, Packet *rep, char *hostname, int port)
                 UDP_Close(sd);
                 return 0;
             }
-        }else {
-            trial_limit --;
         }
-    }while(1);
+		else 
+        	trial_limit --;
+    } while(1);
 }
 
 
-int MFS_Init(char *hostname, int port) {
+int MFS_Init(char *hostname, int port) 
+{
 	server_host = strdup(hostname);
 	server_port = port;
-	online = 1;
+	isUp = 1;
 	return 0;
 }
 
 
-int MFS_Lookup(int pinum, char *name){
-	if(!online)
+int MFS_Lookup(int pinum, char *name)
+{
+	Packet msg;
+	Packet rep;	
+
+	if(!isUp)
 		return -1;
 	
 	if(strlen(name) > 60 || name == NULL)
 		return -1;
-
-	Packet msg;
-	Packet rep;
 
 	msg.inum = pinum;
 	msg.request = REQ_LOOKUP;
 
 	strcpy((char*)&(msg.name), name);
 
-	if(sendRequest
-( &msg, &rep, server_host, server_port) < 0)
+	if(sendRequest(&msg, &rep, server_host, server_port) < 0)
 	  return -1;
 	else
 	  return rep.inum;
 }
 
-int MFS_Stat(int inum, MFS_Stat_t *m) {
-	if(!online)
+int MFS_Stat(int inum, MFS_Stat_t *m) 
+{
+	Packet msg;
+	Packet rep;	
+
+	if(!isUp)
 		return -1;
 
-	Packet msg;
 	msg.inum = inum;
 	msg.request = REQ_STAT;
 
-
-	Packet rep;
-	if(sendRequest
-( &msg, &rep, server_host, server_port) < 0)
+	if(sendRequest(&msg, &rep, server_host, server_port) < 0)
 		return -1;
 	m->type = rep.stat.type;
 	m->size = rep.stat.size;
@@ -106,106 +108,103 @@ int MFS_Stat(int inum, MFS_Stat_t *m) {
 	return 0;
 }
 
-int MFS_Write(int inum, char *buffer, int block){
-	int i = 0;
-	if(!online)
-		return -1;
-	
+int MFS_Write(int inum, char *buffer, int block)
+{
 	Packet msg;
-	Packet rep;
+	Packet rep;	
+	int i = 0;
+
+	if(!isUp)
+		return -1;
 
 	msg.inum = inum;
-
 	for(i=0; i<MFS_BLOCK_SIZE; i++)
 	  msg.buffer[i]=buffer[i];
 
 	msg.block = block;
 	msg.request = REQ_WRITE;
 	
-	if(sendRequest
-( &msg, &rep, server_host, server_port) < 0)
+	if(sendRequest(&msg, &rep, server_host, server_port) < 0)
 		return -1;
 	
 	return rep.inum;
 }
 
-int MFS_Read(int inum, char *buffer, int block){
-  int i = 0;
-  if(!online)
-    return -1;
+int MFS_Read(int inum, char *buffer, int block)
+{
+	Packet msg;
+	Packet rep;	
+	int i = 0;
+
+	if(!isUp)
+		return -1;
 	
-  Packet msg;
+	msg.inum = inum;
+	msg.block = block;
+	msg.request = REQ_READ;
 
+	if(sendRequest(&msg, &rep, server_host, server_port) < 0)
+		return -1;
 
-  msg.inum = inum;
-  msg.block = block;
-  msg.request = REQ_READ;
+	if(rep.inum > -1) 
+	{
+		for(i=0; i<MFS_BLOCK_SIZE; i++)
+			buffer[i]=rep.buffer[i];
+	}
 
-  Packet rep;	
-  if(sendRequest
-( &msg, &rep, server_host, server_port) < 0)
-    return -1;
-
-  if(rep.inum > -1) {
-    for(i=0; i<MFS_BLOCK_SIZE; i++)
-      buffer[i]=rep.buffer[i];
-  }
-
-	
-  return rep.inum;
+	return rep.inum;
 }
 
-int MFS_Creat(int pinum, int type, char *name){
-	if(!online)
+int MFS_Creat(int pinum, int type, char *name)
+{
+	Packet msg;
+	Packet rep;	
+	
+	if(!isUp)
 		return -1;
 	
-	//	if(checkName(name) < 0)
 	if(strlen(name) > 60 || name == NULL)
 		return -1;
-
-	Packet msg;
 
 	strcpy(msg.name, name);
 	msg.inum = pinum;
 	msg.type = type;
 	msg.request = REQ_CREAT;
 
-	Packet rep;	
-	if(sendRequest
-( &msg, &rep, server_host, server_port) < 0)
+	if(sendRequest(&msg, &rep, server_host, server_port) < 0)
 		return -1;
 
 	return rep.inum;
 }
 
-int MFS_Unlink(int pinum, char *name){
-	if(!online)
+int MFS_Unlink(int pinum, char *name)
+{
+	Packet msg;
+	Packet rep;	
+
+	if(!isUp)
 		return -1;
 	
 	if(strlen(name) > 60 || name == NULL)
 		return -1;
-	
-	Packet msg;
 
 	msg.inum = pinum;
 	msg.request = REQ_UNLINK;
 	strcpy(msg.name, name);
 
-	Packet rep;	
-	if(sendRequest
-( &msg, &rep,server_host, server_port ) < 0)
+	if(sendRequest(&msg, &rep,server_host, server_port ) < 0)
 		return -1;
 
 	return rep.inum;
 }
 
-int MFS_Shutdown(){
-  Packet msg;
+int MFS_Shutdown()
+{
+  	Packet msg;
+	Packet rep;	
 	msg.request = REQ_SHUTDOWN;
 
-	Packet rep;
-	if(sendRequest
-( &msg, &rep,server_host, server_port) < 0)
+	if(sendRequest(&msg, &rep,server_host, server_port) < 0)
 		return -1;
 	
 	return 0;

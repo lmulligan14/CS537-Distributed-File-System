@@ -26,12 +26,12 @@ int updateCR()
 	return 0;
 }
 
-INode* GetINode(int iNodeNum) 
+INode* FindINode(int iNodeNum) 
 {
 	INode *iNode = malloc(sizeof(INode));
-	int iNodePointer = iNodeMap[iNodeNum];
+	int iNodePtr = iNodeMap[iNodeNum];
 
-	int rc = lseek(fsImage, iNodePointer, SEEK_SET);
+	int rc = lseek(fsImage, iNodePtr, SEEK_SET);
 	if(rc < 0)
 		return NULL;
 	
@@ -42,28 +42,25 @@ INode* GetINode(int iNodeNum)
 	return iNode;
 }
 
-int WriteFile(int iNum, char *buffer, int block) 
+int FileWrite(int iNum, char *buffer, int block) 
 {
-	INode *iNode = GetINode(iNum);
+	INode *iNode = FindINode(iNum);
 	if(iNode != NULL && iNode->type == MFS_REGULAR_FILE) 
 	{
-		int iNodePointer = 0;
-		int iNodeMapPointer = cr->iNodeMaps[iNum/16];
+		int iNodePtr = 0;
+		int iNodeMapPtr = cr->iNodeMaps[iNum/16];
 		int iNodeMapOffset = iNum % 16;
 		int *iNodeMapPiece = malloc(16*sizeof(int));
 
-		// Read IMap Piece
-		rc = lseek(fsImage, iNodeMapPointer, SEEK_SET);
+		rc = lseek(fsImage, iNodeMapPtr, SEEK_SET);
 		if(rc < 0) 
 			return -1;
 		
 		rc = read(fsImage, iNodeMapPiece, 16*sizeof(int));
 		if(rc < 0) 
 			return -1;
-		
-		// Update INodeMap Piece
-		iNodeMapPiece[iNodeMapOffset] = iNodePointer = cr->logEnd + 16*sizeof(int);
-		// Write INodeNum to IMap Piece
+			
+		iNodeMapPiece[iNodeMapOffset] = iNodePtr = cr->logEnd + 16*sizeof(int);
 		rc = lseek(fsImage, cr->logEnd, SEEK_SET);
 		if(rc < 0) 
 			return -1;
@@ -72,18 +69,14 @@ int WriteFile(int iNum, char *buffer, int block)
 		if(rc < 0) 
 			return -1;
 		
-		// Update Checkpoint Region with IMap Piece
 		cr->iNodeMaps[iNum/16] = cr->logEnd;
 		cr->logEnd += 16*sizeof(int);
 		rc = updateCR();
 		if(rc < 0) 
 			return -1;
 		
+		iNodeMap[iNum] = iNodePtr;
 
-		// Update in Memory INodeMap
-		iNodeMap[iNum] = iNodePointer;
-
-		// Calculate Size of File
 		int i; 
 		for(i = MFS_BLOCK_SIZE - 1; i >= 0; i--) 
 		{
@@ -93,11 +86,9 @@ int WriteFile(int iNum, char *buffer, int block)
 				break;
 			}
 		}
-		// Update INode
-		iNode->blocks[block] = cr->logEnd + sizeof(INode);
 
-		// Write INode
-		int rc = lseek(fsImage, iNodePointer, SEEK_SET);
+		iNode->blocks[block] = cr->logEnd + sizeof(INode);
+		int rc = lseek(fsImage, iNodePtr, SEEK_SET);
 		if(rc < 0) 
 			return -1;
 		
@@ -110,7 +101,6 @@ int WriteFile(int iNum, char *buffer, int block)
 		if(rc < 0) 
 			return -1;
 		
-		// Write Buffer Data
 		rc = lseek(fsImage, cr->logEnd, SEEK_SET);
 		if(rc < 0) 
 			return -1;
@@ -119,12 +109,10 @@ int WriteFile(int iNum, char *buffer, int block)
 		if(rc < 0) 
 			return -1;
 		
-		// Update checkpoint region
 		cr->logEnd += MFS_BLOCK_SIZE;
 		rc = updateCR();
 		if(rc < 0) 
 			return -1;
-		
 	}
 	else 
 		return -1;
@@ -132,9 +120,9 @@ int WriteFile(int iNum, char *buffer, int block)
 	return 0;
 }
 
-int GetParentDirEnt(int pINum, char *cName) 
+int ParentDirGet(int pINum, char *cName) 
 {
-	INode *parentINode = GetINode(pINum);
+	INode *parentINode = FindINode(pINum);
 	if(parentINode != NULL && parentINode->type == MFS_DIRECTORY) 
 	{
 		int blockIndex;		
@@ -166,12 +154,11 @@ int GetParentDirEnt(int pINum, char *cName)
 	return -1;
 }
 
-int WriteParentDirEnt(int pINum, int cINum, char *cName) 
+int ParentDirWrite(int pINum, int cINum, char *cName) 
 {
-	INode *parentINode = GetINode(pINum);
+	INode *parentINode = FindINode(pINum);
 	if(parentINode != NULL && parentINode->type == MFS_DIRECTORY) 
 	{
-		// Read Old Dir Entry Data
 		int blockIndex;		
 		MFS_DirEnt_t *parentBlock = malloc(MFS_BLOCK_SIZE);
 		MFS_DirEnt_t *emptyBlock = malloc(MFS_BLOCK_SIZE);
@@ -181,7 +168,6 @@ int WriteParentDirEnt(int pINum, int cINum, char *cName)
 			int parentBlockPointer = parentINode->blocks[blockIndex];
 			if(parentBlockPointer == 0) 
 			{
-				// Create Directory Entry Block
 				memcpy(parentBlock, emptyBlock, MFS_BLOCK_SIZE);
 				int i;
 				for (i = 0; i < MFS_BLOCK_SIZE/sizeof(MFS_DirEnt_t); i++) 
@@ -191,7 +177,6 @@ int WriteParentDirEnt(int pINum, int cINum, char *cName)
 			} 
 			else 
 			{
-				// Read existing Directory Entry Block
 				rc = lseek(fsImage, parentBlockPointer, SEEK_SET);
 				if(rc < 0) 
 					return -1;
@@ -201,19 +186,17 @@ int WriteParentDirEnt(int pINum, int cINum, char *cName)
 					return -1;
 				
 			}
-			// Write Dir Entry Data
 			int dirEntIndex;			
 			for(dirEntIndex = 0; dirEntIndex < MFS_BLOCK_SIZE/sizeof(MFS_DirEnt_t); dirEntIndex++) 
 			{
 				if((!strcmp(parentBlock[dirEntIndex].name, cName) && parentBlock[dirEntIndex].iNum >= 0) || (parentBlock[dirEntIndex].iNum == -1 && cINum >= 0)) 
 				{
-					int iNodePointer = 0;
-					int iNodeMapPointer = cr->iNodeMaps[pINum/16];
+					int iNodePtr = 0;
+					int iNodeMapPtr = cr->iNodeMaps[pINum/16];
 					int iNodeMapOffset = pINum % 16;
 					int *iNodeMapPiece = malloc(16*sizeof(int));
 
-					// Read IMap Piece
-					rc = lseek(fsImage, iNodeMapPointer, SEEK_SET);
+					rc = lseek(fsImage, iNodeMapPtr, SEEK_SET);
 					if(rc < 0) 
 						return -1;
 					
@@ -221,9 +204,7 @@ int WriteParentDirEnt(int pINum, int cINum, char *cName)
 					if(rc < 0) 
 						return -1;
 					
-					// Update INodeMap Piece
-					iNodeMapPiece[iNodeMapOffset] = iNodePointer = cr->logEnd + 16*sizeof(int);
-					// Write INodeNum to IMap Piece
+					iNodeMapPiece[iNodeMapOffset] = iNodePtr = cr->logEnd + 16*sizeof(int);
 					rc = lseek(fsImage, cr->logEnd, SEEK_SET);
 					if(rc < 0) 
 						return -1;
@@ -232,19 +213,16 @@ int WriteParentDirEnt(int pINum, int cINum, char *cName)
 					if(rc < 0) 
 						return -1;
 					
-					// Update Checkpoint Region with IMap Piece
 					cr->iNodeMaps[pINum/16] = cr->logEnd;
 					cr->logEnd += 16*sizeof(int);
 					rc = updateCR();
 					if(rc < 0) 
 						return -1;
 					
-					// Update in Memory INodeMap
-					iNodeMap[pINum] = iNodePointer;
-					parentINode->blocks[blockIndex] = cr->logEnd + sizeof(INode); // Update INode
+					iNodeMap[pINum] = iNodePtr;
+					parentINode->blocks[blockIndex] = cr->logEnd + sizeof(INode);
 
-					// Write INode
-					rc = lseek(fsImage, iNodePointer, SEEK_SET);
+					rc = lseek(fsImage, iNodePtr, SEEK_SET);
 					if(rc < 0) 
 						return -1;
 					
@@ -257,7 +235,6 @@ int WriteParentDirEnt(int pINum, int cINum, char *cName)
 					if(rc < 0) 
 						return -1;
 					
-					// Write Dir Entries Block
 					parentBlock[dirEntIndex].iNum = cINum;
 					sprintf(parentBlock[dirEntIndex].name, cName, sizeof(cName));
 					rc = lseek(fsImage, cr->logEnd, SEEK_SET);
@@ -268,7 +245,6 @@ int WriteParentDirEnt(int pINum, int cINum, char *cName)
 					if(rc < 0) 
 						return -1;
 					
-					// Update checkpoint region
 					cr->logEnd += MFS_BLOCK_SIZE;
 					rc = updateCR();
 					if(rc < 0) 
@@ -285,15 +261,13 @@ int WriteParentDirEnt(int pINum, int cINum, char *cName)
 		}	
 	}
 	else 
-	{
 		return -1;
-	}
 
 	return 0;
 }
 
-int IsDirectoryEmpty(int iNum) {
-	INode *iNode = GetINode(iNum);
+int DirIsEmpty(int iNum) {
+	INode *iNode = FindINode(iNum);
 	if(iNode != NULL && iNode->type == MFS_DIRECTORY) 
 	{
 		int blockIndex;		
@@ -303,7 +277,6 @@ int IsDirectoryEmpty(int iNum) {
 			int blockPointer = iNode->blocks[blockIndex];
 			if(blockPointer > 0) 
 			{
-				//int blockPointer = iNode->blocks[0];
 				int rc = lseek(fsImage, blockPointer, SEEK_SET);
 				if(rc < 0) 
 					return -1;
@@ -326,17 +299,16 @@ int IsDirectoryEmpty(int iNum) {
 	return 0;
 }
 
-int MkINode(int type, int size) 
+int InodeInit(int type, int size) 
 {
-	int iNodeMapPointer = cr->iNodeMaps[currInodeNum/16];
+	int iNodeMapPtr = cr->iNodeMaps[currInodeNum/16];
 	int iNodeMapOffset = currInodeNum % 16;
 	int *iNodeMapPiece = malloc(16*sizeof(int));
-	int iNodePointer = 0;
+	int iNodePtr = 0;
 	int rc;
 	if(iNodeMapOffset == 0) 
 	{
-		// Write IMap Piece with initial INode
-		iNodeMapPiece[0] = iNodePointer = cr->logEnd + 16*sizeof(int);
+		iNodeMapPiece[0] = iNodePtr = cr->logEnd + 16*sizeof(int);
 		rc = lseek(fsImage, cr->logEnd, SEEK_SET);
 		if(rc < 0) 
 			return -1;
@@ -345,7 +317,6 @@ int MkINode(int type, int size)
 		if(rc < 0) 
 			return -1;
 		
-		// Update Checkpoint Region with IMap Piece
 		cr->iNodeMaps[currInodeNum/16] = cr->logEnd;
 		cr->logEnd += 16*sizeof(int);
 		rc = updateCR();
@@ -355,8 +326,7 @@ int MkINode(int type, int size)
 	}
 	else 
 	{
-		// Read IMap Piece
-		rc = lseek(fsImage, iNodeMapPointer, SEEK_SET);
+		rc = lseek(fsImage, iNodeMapPtr, SEEK_SET);
 		if(rc < 0) 
 			return -1;
 		
@@ -364,8 +334,7 @@ int MkINode(int type, int size)
 		if(rc < 0) 
 			return -1;
 		
-		// Write INodeNum to IMap Piece
-		iNodeMapPiece[iNodeMapOffset] = iNodePointer = cr->logEnd + 16*sizeof(int);
+		iNodeMapPiece[iNodeMapOffset] = iNodePtr = cr->logEnd + 16*sizeof(int);
 		rc = lseek(fsImage, cr->logEnd, SEEK_SET);
 		if(rc < 0) 
 			return -1;
@@ -374,7 +343,6 @@ int MkINode(int type, int size)
 		if(rc < 0) 
 			return -1;
 		
-		// Update Checkpoint Region with IMap Piece
 		cr->iNodeMaps[currInodeNum/16] = cr->logEnd;
 		cr->logEnd += 16*sizeof(int);
 		rc = updateCR();
@@ -382,16 +350,16 @@ int MkINode(int type, int size)
 			return -1;
 		
 	}
-	iNodeMap[currInodeNum] = iNodePointer;
+	iNodeMap[currInodeNum] = iNodePtr;
 
 	INode *iNode = malloc(sizeof(INode));
 	iNode->type = type;
 	iNode->size = size;
 	if(type == MFS_DIRECTORY) 
 	{
-		iNode->blocks[0] = iNodePointer + sizeof(INode);
+		iNode->blocks[0] = iNodePtr + sizeof(INode);
 	}
-	rc = lseek(fsImage, iNodePointer, SEEK_SET);
+	rc = lseek(fsImage, iNodePtr, SEEK_SET);
 	if(rc < 0) 
 		return -1;
 	
@@ -410,22 +378,22 @@ int MkINode(int type, int size)
 	return currInodeNum-1;
 }
 
-int MkFile(int pINum, char *name) 
+int FileInit(int pINum, char *name) 
 {
-	int iNodeNum = MkINode(MFS_REGULAR_FILE, 0);
+	int iNodeNum = InodeInit(MFS_REGULAR_FILE, 0);
 	if(iNodeNum < 0) 
 		return -1;
 
-	int rc = WriteParentDirEnt(pINum, iNodeNum, name);
+	int rc = ParentDirWrite(pINum, iNodeNum, name);
 	if(rc < 0) 
 		return -1;
 
 	return 0;
 }
 
-int MkDir(int pINum, char *name) 
+int DirInit(int pINum, char *name) 
 {
-	int iNodeNum = MkINode(MFS_DIRECTORY, 2*sizeof(MFS_DirEnt_t));
+	int iNodeNum = InodeInit(MFS_DIRECTORY, 2*sizeof(MFS_DirEnt_t));
 	if(iNodeNum < 0) 
 		return -1;
 	
@@ -447,33 +415,28 @@ int MkDir(int pINum, char *name)
 	if(rc < 0) 
 		return -1;
 	
-	// Update checkpoint region
 	cr->logEnd += MFS_BLOCK_SIZE;
 	rc = updateCR();
 	if(rc < 0) 
 		return -1;
 	
-	// Update parent directory entry
-	// Only update directories that aren't the root dir	
 	if(pINum != iNodeNum) 
 	{
-		rc = WriteParentDirEnt(pINum, iNodeNum, name);
+		rc = ParentDirWrite(pINum, iNodeNum, name);
 		if(rc < 0) 
 			return -1;
-		
 	}
 
 	return 0;
 }
 
-int ReadFile(int iNum, char *buffer, int block) 
+int FileRead(int iNum, char *buffer, int block) 
 {
-	INode *iNode = GetINode(iNum);
+	INode *iNode = FindINode(iNum);
 	if(iNode == NULL) 
 		return -1;
 	
 	int blockPointer = iNode->blocks[block];
-	// Read INode Block
 	rc = lseek(fsImage, blockPointer, SEEK_SET);
 	if(rc < 0) 
 		return -1;
@@ -492,9 +455,9 @@ void FS_Creat(int pINum, int type, char *name)
 	if(strlen(name) <= 28) 
 	{
 		if(type == MFS_REGULAR_FILE) 
-			retCode = MkFile(pINum, name);
+			retCode = FileInit(pINum, name);
 		else 
-			retCode = MkDir(pINum, name);
+			retCode = DirInit(pINum, name);
 	}
 
 	fsync(fsImage);
@@ -505,12 +468,13 @@ void FS_Creat(int pINum, int type, char *name)
 
 void FS_Lookup(int pINum, char *name) 
 {
-  Packet reply;
-	int retCode = -1;		
-	INode *iNode = GetINode(pINum);
+  	Packet reply;
+	int retCode = -1;	
+
+	INode *iNode = FindINode(pINum);
 	if(iNode != NULL && iNode->type == MFS_DIRECTORY) 
 	{
-		retCode = GetParentDirEnt(pINum, name);
+		retCode = ParentDirGet(pINum, name);
 	}
 
 	fsync(fsImage);
@@ -526,7 +490,7 @@ void FS_Write(int iNum, char *buffer, int block)
 	
 	if(block >= 0 && block < 14) 
 	{
-		retCode = WriteFile(iNum, buffer, block);
+		retCode = FileWrite(iNum, buffer, block);
 	}
 
 	fsync(fsImage);
@@ -540,8 +504,9 @@ void FS_Stat(int iNum)
 {
   	Packet reply;
 	int retCode = -1;
+
     MFS_Stat_t *stat = malloc(sizeof(MFS_Stat_t));
-	INode *iNode = GetINode(iNum);
+	INode *iNode = FindINode(iNum);
 	if(iNode != NULL) 
 	{
 		stat = (MFS_Stat_t *)iNode;		
@@ -560,10 +525,11 @@ void FS_Read(int iNum, int block)
 {
   	Packet reply;
 	int retCode = -1;
+
 	char *buffer = malloc(MFS_BLOCK_SIZE);
 	if(block >= 0 && block < 14) 
 	{
-		retCode = ReadFile(iNum, buffer, block);
+		retCode = FileRead(iNum, buffer, block);
 	}
 
 	fsync(fsImage);
@@ -577,12 +543,13 @@ void FS_Unlink(int pINum, char *name)
 {
   	Packet reply;
 	int retCode = -1;
-	int iNum = GetParentDirEnt(pINum, name);
+	
+	int iNum = ParentDirGet(pINum, name);
 	if(iNum >= 0) 
 	{
-		retCode = IsDirectoryEmpty(iNum);
+		retCode = DirIsEmpty(iNum);
 		if(retCode == 0) 
-			retCode = WriteParentDirEnt(pINum, -1, name);
+			retCode = ParentDirWrite(pINum, -1, name);
 		
 	}
 	else 
@@ -624,7 +591,7 @@ int server_init(int portnum, char* image)
 	{
 		cr->logEnd = sizeof(CheckpointRegion);
 		updateCR();
-		MkDir(currInodeNum, "");
+		DirInit(currInodeNum, "");
 		fsync(fsImage);
 	} 
 	else 
@@ -633,10 +600,10 @@ int server_init(int portnum, char* image)
 		int i;
 		for (i = 0; i < 256; i++) 
 		{
-			int iNodeMapPointer = cr->iNodeMaps[i];
-			if(iNodeMapPointer > 0) 
+			int iNodeMapPtr = cr->iNodeMaps[i];
+			if(iNodeMapPtr > 0) 
 			{			
-				lseek(fsImage, iNodeMapPointer, SEEK_SET);
+				lseek(fsImage, iNodeMapPtr, SEEK_SET);
 				read(fsImage, iNodeMap + (16*i), 16*sizeof(int));
 			}
 			else 
