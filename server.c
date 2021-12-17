@@ -2,6 +2,7 @@
 #include <sys/stat.h>
 #include "udp.h"
 #include "mfs.h"
+#include "structures.h"
 
 int sd, rc, imageFD, currentINodeNum;
 struct sockaddr_in *addr;
@@ -43,15 +44,15 @@ int WriteParentDirEnt(int pINum, int cINum, char *cName) {
 	if(parentINode != NULL && parentINode->type == MFS_DIRECTORY) {
 		// Read Old Dir Entry Data
 		int blockIndex;		
-		DirEnt *parentBlock = malloc(MFS_BLOCK_SIZE);
-		DirEnt *emptyBlock = malloc(MFS_BLOCK_SIZE);
+		MFS_DirEnt_t *parentBlock = malloc(MFS_BLOCK_SIZE);
+		MFS_DirEnt_t *emptyBlock = malloc(MFS_BLOCK_SIZE);
 		for(blockIndex = 0; blockIndex < 14; blockIndex++) {
 			int parentBlockPointer = parentINode->blocks[blockIndex];
 			if(parentBlockPointer == 0) {
 				// Create Directory Entry Block
 				memcpy(parentBlock, emptyBlock, MFS_BLOCK_SIZE);
 				int i;
-				for (i = 0; i < MFS_BLOCK_SIZE/sizeof(DirEnt); i++) {
+				for (i = 0; i < MFS_BLOCK_SIZE/sizeof(MFS_DirEnt_t); i++) {
 					parentBlock[i].iNum = -1;
 				}
 			} 
@@ -68,7 +69,7 @@ int WriteParentDirEnt(int pINum, int cINum, char *cName) {
 			}
 			// Write Dir Entry Data
 			int dirEntIndex;			
-			for(dirEntIndex = 0; dirEntIndex < MFS_BLOCK_SIZE/sizeof(DirEnt); dirEntIndex++) {
+			for(dirEntIndex = 0; dirEntIndex < MFS_BLOCK_SIZE/sizeof(MFS_DirEnt_t); dirEntIndex++) {
 				if((!strcmp(parentBlock[dirEntIndex].name, cName) && parentBlock[dirEntIndex].iNum >= 0) || (parentBlock[dirEntIndex].iNum == -1 && cINum >= 0)) {
 					int iNodePointer = 0;
 					int iNodeMapPointer = checkpointRegion->iNodeMaps[pINum/16];
@@ -141,7 +142,7 @@ int WriteParentDirEnt(int pINum, int cINum, char *cName) {
 					}
 					return 0;
 				}
-				else if(blockIndex == 13 && dirEntIndex == (MFS_BLOCK_SIZE/sizeof(DirEnt))-1) {
+				else if(blockIndex == 13 && dirEntIndex == (MFS_BLOCK_SIZE/sizeof(MFS_DirEnt_t))-1) {
 					return -1;
 				}
 			}
@@ -158,7 +159,7 @@ int GetParentDirEnt(int pINum, char *cName) {
 	INode *parentINode = GetINode(pINum);
 	if(parentINode != NULL && parentINode->type == MFS_DIRECTORY) {
 		int blockIndex;		
-		DirEnt *parentBlock = malloc(MFS_BLOCK_SIZE);
+		MFS_DirEnt_t *parentBlock = malloc(MFS_BLOCK_SIZE);
 		for(blockIndex = 0; blockIndex < 14; blockIndex++) {
 			int parentBlockPointer = parentINode->blocks[blockIndex];
 			if(parentBlockPointer > 0) {
@@ -171,8 +172,8 @@ int GetParentDirEnt(int pINum, char *cName) {
 					return -1;
 				}
 				int dirEntIndex;			
-				for(dirEntIndex = 0; dirEntIndex < MFS_BLOCK_SIZE/sizeof(DirEnt); dirEntIndex++) {
-					DirEnt parentDirEnt = parentBlock[dirEntIndex];
+				for(dirEntIndex = 0; dirEntIndex < MFS_BLOCK_SIZE/sizeof(MFS_DirEnt_t); dirEntIndex++) {
+					MFS_DirEnt_t parentDirEnt = parentBlock[dirEntIndex];
 					if(!strcmp(parentDirEnt.name, cName)) {
 						return parentDirEnt.iNum;
 					}
@@ -187,7 +188,7 @@ int IsDirectoryEmpty(int iNum) {
 	INode *iNode = GetINode(iNum);
 	if(iNode != NULL && iNode->type == MFS_DIRECTORY) {
 		int blockIndex;		
-		DirEnt *block = malloc(MFS_BLOCK_SIZE);
+		MFS_DirEnt_t *block = malloc(MFS_BLOCK_SIZE);
 		for(blockIndex = 0; blockIndex < 14; blockIndex++) {
 			int blockPointer = iNode->blocks[blockIndex];
 			if(blockPointer > 0) {
@@ -201,8 +202,8 @@ int IsDirectoryEmpty(int iNum) {
 					return -1;
 				}
 				int dirEntIndex;			
-				for(dirEntIndex = 0; dirEntIndex < MFS_BLOCK_SIZE/sizeof(DirEnt); dirEntIndex++) {
-					DirEnt dirEnt = block[dirEntIndex];
+				for(dirEntIndex = 0; dirEntIndex < MFS_BLOCK_SIZE/sizeof(MFS_DirEnt_t); dirEntIndex++) {
+					MFS_DirEnt_t dirEnt = block[dirEntIndex];
 					if(!(dirEnt.iNum < 0 || !strcmp(dirEnt.name, ".") || !strcmp(dirEnt.name, ".."))) {
 						return -1;
 					}
@@ -380,17 +381,17 @@ int MkINode(int type, int size) {
 }
 
 int MkDir(int pINum, char *name) {
-	int iNodeNum = MkINode(MFS_DIRECTORY, 2*sizeof(DirEnt));
+	int iNodeNum = MkINode(MFS_DIRECTORY, 2*sizeof(MFS_DirEnt_t));
 	if(iNodeNum < 0) {
 		return -1;
 	}
-	DirEnt *block = malloc(MFS_BLOCK_SIZE);
+	MFS_DirEnt_t *block = malloc(MFS_BLOCK_SIZE);
 	sprintf(block[0].name,".");
 	block[0].iNum = iNodeNum;
 	sprintf(block[1].name, "..");
 	block[1].iNum = pINum;
 	int i;
-	for (i = 2; i < MFS_BLOCK_SIZE/sizeof(DirEnt); i++) {
+	for (i = 2; i < MFS_BLOCK_SIZE/sizeof(MFS_DirEnt_t); i++) {
 		block[i].iNum = -1;
 	}
 	int rc = lseek(imageFD, checkpointRegion->logEnd, SEEK_SET);
@@ -469,10 +470,10 @@ void FS_Lookup(int pINum, char *name) {
 void FS_Stat(int iNum){
   Packet reply;
 	int retCode = -1;
-    Stat *stat = malloc(sizeof(Stat));
+    MFS_Stat_t *stat = malloc(sizeof(MFS_Stat_t));
 	INode *iNode = GetINode(iNum);
 	if(iNode != NULL) {
-		stat = (Stat *)iNode;		
+		stat = (MFS_Stat_t *)iNode;		
 		retCode = 0;
 	}
 

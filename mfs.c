@@ -13,7 +13,7 @@
 #include <assert.h>
 
 #include "udp.h"
-
+#include "structures.h"
 #include "mfs.h"
 
 int UDP_Send( Packet *tx, Packet *rx, char *hostname, int port)
@@ -95,7 +95,7 @@ int MFS_Lookup(int pinum, char *name){
 	  return rx.inum;
 }
 
-int MFS_Stat(int inum, Stat *m) {
+int MFS_Stat(int inum, MFS_Stat_t *m) {
 	if(!online)
 		return -1;
 

@@ -18,7 +18,7 @@
 #include <netinet/in.h>
 
 #include "mfs.h"
-
+#include "structures.h"
 int
 main(int argc, char *argv[])
 {
