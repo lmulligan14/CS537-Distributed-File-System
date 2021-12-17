@@ -9,9 +9,9 @@
         ""
       ],
       "stopAtEntry": false,
-      "cwd": "/u/w/a/wangb/private/cs537/p4/Distributed-File-System",
+      "cwd": "/u/w/a/wangb/private/cs537/Distributed-File-System",
       "environment": [],
-      "program": "/u/w/a/wangb/private/cs537/p4/Distributed-File-System/build/Debug/outDebug",
+      "program": "/u/w/a/wangb/private/cs537/Distributed-File-System/build/Debug/outDebug",
       "internalConsoleOptions": "openOnSessionStart",
       "MIMode": "gdb",
       "miDebuggerPath": "/usr/bin/gdb",
