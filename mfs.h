@@ -10,6 +10,54 @@
 #define LEN_NAME         (60)
 #define NUM_INODE_PIECES (MAX_NUM_INODES/IMAP_PIECE_SIZE) // 256
 
+
+enum MFS_REQ {
+  REQ_INIT,
+  REQ_LOOKUP,
+  REQ_STAT,
+  REQ_WRITE,
+  REQ_READ,
+  REQ_CREAT,
+  REQ_UNLINK,
+  REQ_RESPONSE,
+  REQ_SHUTDOWN
+};
+
+// struct message/packet
+typedef struct Packet {
+	enum MFS_REQ request;
+
+	int inum;
+	int block;
+	int type;
+
+	char name[LEN_NAME];
+	char buffer[MFS_BLOCK_SIZE];
+	Stat stat;
+} Packet;
+
+
+// struct for INode
+typedef struct __MFS_INode_t {
+    int type;   // MFS_DIRECTORY or MFS_REGULAR
+    int size;   // bytes
+	int blocks[14];
+    // note: no permissions, access times, etc.
+} INode;
+
+// struct for checkpoint region
+typedef struct __MFS_CheckReg_t {
+    int logEnd;
+	int iNodeMaps[256];
+} CheckReg;
+
+// struct for imap piece
+//takes inode number as input and produces the disk address
+//of the most recent version of the inode
+typedef struct ImapPiece {
+    int inodes[IMAP_PIECE_SIZE]; // holds 16 inodes
+} ImapPiece;
+
 typedef struct __MFS_Stat_t {
     int type;   // MFS_DIRECTORY or MFS_REGULAR
     int size;   // bytes
