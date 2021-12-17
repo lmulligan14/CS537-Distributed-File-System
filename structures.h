@@ -4,7 +4,6 @@
 #define MFS_REGULAR_FILE (1)
 #define MAX_NUM_INODES   (4096)
 #define IMAP_PIECE_SIZE  (16)
-#define LEN_NAME         (60)
 #define NUM_INODE_PIECES (MAX_NUM_INODES/IMAP_PIECE_SIZE) // 256
 #define MFS_BLOCK_SIZE (4096)
 
@@ -28,25 +27,24 @@ typedef struct Packet {
 	int block;
 	int type;
 
-	char name[LEN_NAME];
+	char name[64];
 	char buffer[MFS_BLOCK_SIZE];
 	MFS_Stat_t stat;
 } Packet;
 
 
 // struct for INode
-typedef struct __MFS_INode_t {
+typedef struct INode {
     int type;   // MFS_DIRECTORY or MFS_REGULAR
     int size;   // bytes
 	int blocks[14];
-    // note: no permissions, access times, etc.
 } INode;
 
 // struct for checkpoint region
-typedef struct __MFS_CheckReg_t {
+typedef struct CheckpointRegion {
     int logEnd;
 	int iNodeMaps[256];
-} CheckReg;
+} CheckpointRegion;
 
 // struct for imap piece
 //takes inode number as input and produces the disk address
