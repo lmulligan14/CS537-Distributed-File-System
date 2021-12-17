@@ -7,42 +7,49 @@
 #define MFS_BLOCK_SIZE   (4096)
 #define MAX_NUM_INODES   (4096)
 #define IMAP_PIECE_SIZE  (16)
+#define LEN_NAME         (60)
 #define NUM_INODE_PIECES (MAX_NUM_INODES/IMAP_PIECE_SIZE) // 256
 
-typedef struct __MFS_Stat_t {
-    int type;   // MFS_DIRECTORY or MFS_REGULAR
-    int size;   // bytes
-    // note: no permissions, access times, etc.
-} MFS_Stat_t;
 
-typedef struct __MFS_DirEnt_t {
-    char name[28];  // up to 28 bytes of name in directory (including \0)
-    int  inum;      // inode number of entry (-1 means entry not used)
-} MFS_DirEnt_t;
+enum MFS_REQ {
+  REQ_INIT,
+  REQ_LOOKUP,
+  REQ_STAT,
+  REQ_WRITE,
+  REQ_READ,
+  REQ_CREAT,
+  REQ_UNLINK,
+  REQ_RESPONSE,
+  REQ_SHUTDOWN
+};
 
 // struct message/packet
-typedef struct packet {
-    int request;
-    char block[MFS_BLOCK_SIZE];
-    int inum;
-    int blocknum;
-    char name[64];
-    int type;
-    MFS_Stat_t stat;
-} packet;
+typedef struct Packet {
+	enum MFS_REQ request;
+
+	int inum;
+	int block;
+	int type;
+
+	char name[LEN_NAME];
+	char buffer[MFS_BLOCK_SIZE];
+	Stat stat;
+} Packet;
+
 
 // struct for INode
-typedef struct INode {
-    int type;
-    int size;
-    int blocks[14];
+typedef struct __MFS_INode_t {
+    int type;   // MFS_DIRECTORY or MFS_REGULAR
+    int size;   // bytes
+	int blocks[14];
+    // note: no permissions, access times, etc.
 } INode;
 
 // struct for checkpoint region
-typedef struct CheckpointRegion {
+typedef struct __MFS_CheckReg_t {
     int logEnd;
-    int imap[NUM_INODE_PIECES]; // holds 256 imap pieces
-} CheckpointRegion;
+	int iNodeMaps[256];
+} CheckReg;
 
 // struct for imap piece
 //takes inode number as input and produces the disk address
@@ -51,26 +58,21 @@ typedef struct ImapPiece {
     int inodes[IMAP_PIECE_SIZE]; // holds 16 inodes
 } ImapPiece;
 
-typedef struct DirBlock {
-    MFS_DirEnt_t entries[MFS_BLOCK_SIZE/sizeof(MFS_DirEnt_t)]; // holds 128 entries
-} DirBlock;
+typedef struct __MFS_Stat_t {
+    int type;   // MFS_DIRECTORY or MFS_REGULAR
+    int size;   // bytes
+    // note: no permissions, access times, etc.
+} Stat;
 
-typedef struct MFS_Lookup_Function{
-    int type;
-    int pinum;
-    char name[64];
-} MFS_Lookup_Function;
+typedef struct __MFS_DirEnt_t {
+    char name[28];  // up to 28 bytes of name in directory (including \0)
+    int  iNum;      // inode number of entry (-1 means entry not used)
+} DirEnt;
 
-typedef struct MFS_Write_Function{
-    int type;
-    int inum;
-    char buffer[4096];
-    int block;
-} MFS_Write_Function;
 
 int MFS_Init(char *hostname, int port);
 int MFS_Lookup(int pinum, char *name);
-int MFS_Stat(int inum, MFS_Stat_t *m);
+int MFS_Stat(int inum, Stat *m);
 int MFS_Write(int inum, char *buffer, int block);
 int MFS_Read(int inum, char *buffer, int block);
 int MFS_Creat(int pinum, int type, char *name);
